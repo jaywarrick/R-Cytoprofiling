@@ -1,8 +1,7 @@
 library(data.table)
 
-browseData <- function(x)
+browseShinyData <- function()
 {
-     shinyData <- x
      sourceGitHubFile(user='jaywarrick', repo='R-General', branch='master', file='DataBrowser/ui.R')
      sourceGitHubFile(user='jaywarrick', repo='R-General', branch='master', file='DataBrowser/server.R')
      shinyApp(ui=myUI, server=myServer)
