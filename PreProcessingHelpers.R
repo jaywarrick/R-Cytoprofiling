@@ -39,7 +39,7 @@ getFileTable <- function(fileTable)
      if(length(unique(temp$ImageChannel)) > 1)
      {
           # Calculate differences between channels
-          idCols <- getAllColNamesExcept(duh, c('Value','ImageChannel'))
+          idCols <- getAllColNamesExcept(temp, c('Value','ImageChannel'))
           temp2 <- temp[,list(Combo=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols]
           temp2$Measurement <- paste0(temp2$Measurement, '_', temp2$Combo)
           temp2[,Combo:=NULL]
