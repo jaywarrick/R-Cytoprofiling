@@ -14,7 +14,7 @@ getComboNames <- function(x, prefix='')
           return(NULL)
      }
      temp <- combn(x, 2)
-     print(temp)
+     #print(temp)
      temp <- paste0(temp[1,],"_minus_",temp[2,])
      temp <- paste0(prefix, '_', temp)
      return(temp)
@@ -58,3 +58,4 @@ getFileTable <- function(fileTable)
      setcolorder(temp, sort(names(temp)))
      return(temp)
 }
+
