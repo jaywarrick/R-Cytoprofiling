@@ -39,23 +39,31 @@ getFileTable <- function(fileTable)
      if(length(unique(temp$ImageChannel)) > 1)
      {
           # Calculate differences between channels
-          temp2 <- temp[,list(Combo=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=.(Id,MaskChannel,Measurement)]
+          idCols <- getAllColNamesExcept(duh, c('Value','ImageChannel'))
+          temp2 <- temp[,list(Combo=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols]
           temp2$Measurement <- paste0(temp2$Measurement, '_', temp2$Combo)
           temp2[,Combo:=NULL]
           temp$Measurement <- paste0(temp$Measurement, '_', temp$MaskChannel, '_', temp$ImageChannel)
           temp[,MaskChannel:=NULL]
           temp[,ImageChannel:=NULL]
-          temp <- rbindlist(list(temp, temp2))
+
      }else
      {
           # We only have 1 ImageChannel (or 'none'), so just remove the column and only use the Mask Channel
           temp$Measurement <- paste0(temp$Measurement, '_', temp$MaskChannel)
           temp[,MaskChannel:=NULL]
           temp[,ImageChannel:=NULL]
+          temp2 <- NULL
      }
 
-     temp <- reorganize(temp, c('Id','Label'))
+     temp <- rbindlist(list(myData$main, myData$diff))
+     temp <- reorganize(myData$main, c('Id','Label'))
      setcolorder(temp, sort(names(temp)))
      return(temp)
+}
+
+getAllColNamesExcept <- function(x, names)
+{
+     return(names(x)[!(names(x) %in% names)])
 }
 
