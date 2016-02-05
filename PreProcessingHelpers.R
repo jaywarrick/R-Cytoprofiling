@@ -35,35 +35,58 @@ getFileTable <- function(fileTable)
 {
      temp <- data.table(read.arff(fileTable$Value[1]))
      setorder(temp, Id, Label, MaskChannel, Measurement, ImageChannel)
+     return(temp)
+}
 
-     if(length(unique(temp$ImageChannel)) > 1)
+getDifferences <- function(x)
+{
+     if(length(unique(x$ImageChannel)) > 1)
      {
           # Calculate differences between channels
-          idCols <- getAllColNamesExcept(temp, c('Value','ImageChannel'))
-          temp2 <- temp[,list(Combo=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols]
-          temp2$Measurement <- paste0(temp2$Measurement, '_', temp2$Combo)
-          temp2[,Combo:=NULL]
-          temp$Measurement <- paste0(temp$Measurement, '_', temp$MaskChannel, '_', temp$ImageChannel)
-          temp[,MaskChannel:=NULL]
-          temp[,ImageChannel:=NULL]
-
+          idCols <- getAllColNamesExcept(x, c('Value','ImageChannel'))
+          x2 <- x[,list(ImageChannel=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols]
      }else
      {
-          # We only have 1 ImageChannel (or 'none'), so just remove the column and only use the Mask Channel
-          temp$Measurement <- paste0(temp$Measurement, '_', temp$MaskChannel)
-          temp[,MaskChannel:=NULL]
-          temp[,ImageChannel:=NULL]
-          temp2 <- NULL
+          # return an empty table with the same columns as provided
+          return(x[FALSE])
      }
+}
 
-     temp <- rbindlist(list(myData$main, myData$diff))
-     temp <- reorganize(myData$main, c('Id','Label'))
-     setcolorder(temp, sort(names(temp)))
-     return(temp)
+getWideTable <- function(x)
+{
+     idCols <- getAllColNamesExcept(x, c('Value','Measurement'))
+     x <- reorganize(x, idCols)
+     setcolorder(x, sort(names(x)))
+     return(x)
+}
+
+standardizeWideData <- function(x)
+{
+     x[,lapply(.SD, function(x){if(is.numeric(x)){return(scale(x))}else{return(x)}})]
+}
+
+standardizeLongData <- function(x)
+{
+     x[,Value:=scale(Value),by=c('MaskChannel','ImageChannel','Measurement')]
 }
 
 getAllColNamesExcept <- function(x, names)
 {
      return(names(x)[!(names(x) %in% names)])
+}
+
+getNumericCols <- function(x)
+{
+     return(names(x)[unlist(x[,lapply(.SD, is.numeric)])])
+}
+
+getNonNumericCols <- function(x)
+{
+     return(names(x)[!unlist(x[,lapply(.SD, is.numeric)])])
+}
+
+replaceCharacterInColNames <- function(x, old, new)
+{
+     names(x) <- gsub(old, new, names(x))
 }
 

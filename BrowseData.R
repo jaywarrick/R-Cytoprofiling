@@ -11,6 +11,7 @@ fileTable <- read.arff('/Volumes/JEX Cruncher/JEX Databases/Dominique/temp/JEXDa
 # duh[,mean(c),by=temp]
 shinyData <- getFileTable(fileTable)
 
+shinyData$cId <- paste0(shinyData$Id, ' RC[', shinyData$ImRow, ',', shinyData$ImCol, ']')
 
 browseShinyData()
 
