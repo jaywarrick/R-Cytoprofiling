@@ -2,8 +2,8 @@ library(data.table)
 
 browseShinyData <- function()
 {
-     sourceGitHubFile(user='jaywarrick', repo='R-General', branch='master', file='DataBrowser/ui.R')
-     sourceGitHubFile(user='jaywarrick', repo='R-General', branch='master', file='DataBrowser/server.R')
+     sourceGitHubFile(user='jaywarrick', repo='R-General', branch='master', file='DataClassBrowser/ui.R')
+     sourceGitHubFile(user='jaywarrick', repo='R-General', branch='master', file='DataClassBrowser/server.R')
      shinyApp(ui=myUI, server=myServer)
 }
 
@@ -38,6 +38,80 @@ getFileTable <- function(fileTable)
      return(temp)
 }
 
+getColNamesContaining <- function(x, name)
+{
+     return(names(x)[grepl(name,names(x))])
+}
+
+getMeasurementNamesContaining <- function(x, name)
+{
+     ms <- unique(x$Measurement)
+     return(ms[grepl(name,ms)])
+}
+
+removeColNamesContaining <- function(x, name)
+{
+     colsToRemove <- getColNamesContaining(x,name)
+     print(paste0("Removing colums with names containing '", name, "'"))
+     for(colToRemove in colsToRemove)
+     {
+          print(colToRemove)
+          x[,(colToRemove):=NULL]
+     }
+     return(x)
+}
+
+removeMeasurementNamesContaining <- function(x, name)
+{
+     namesToRemove <- getMeasurementNamesContaining(x, name)
+     print("Removing the following Measurements...")
+     for(name in namesToRemove)
+     {
+          print(name)
+     }
+     x <- x[!(Measurement %in% namesToRemove)]
+     return(x)
+}
+
+removeNoVarianceCols <- function(x)
+{
+     namesToRemove <- getNoVarianceCols(x)
+     if(length(namesToRemove) > 0)
+     {
+          print("Removing cols with a variance of zero...")
+          for(name in namesToRemove)
+          {
+               print(name)
+               x[,(name):=NULL]
+          }
+     }
+}
+
+getNoVarianceMeasurements <- function(x)
+{
+     tempSD <- function(x){sd(x, na.rm=TRUE)}
+     temp <- x[,lapply(.SD, tempSD),.SDcols=getNumericCols(x),by=c('MaskChannel','ImageChannel','Measurement')]
+     return(unique(temp[Value==0]$Measurement))
+}
+
+removeNoVarianceMeasurements <- function(x)
+{
+     msToRemove <- getNoVarianceMeasurements(x)
+     print('Removing the following Measurements with zero variance...')
+     for(m in msToRemove)
+     {
+          print(m)
+     }
+     return(x[!(Measurement %in% msToRemove)])
+}
+
+getNoVarianceCols <- function(x)
+{
+     tempSD <- function(y){sd(y, na.rm = TRUE)}
+     tempNames <- x[,lapply(.SD, tempSD), .SDcols=getNumericCols(x)]
+     return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
+}
+
 getDifferences <- function(x)
 {
      if(length(unique(x$ImageChannel)) > 1)
@@ -56,18 +130,26 @@ getWideTable <- function(x)
 {
      idCols <- getAllColNamesExcept(x, c('Value','Measurement'))
      x <- reorganize(x, idCols)
-     setcolorder(x, sort(names(x)))
+     x <- sortColsByName(x);
      return(x)
+}
+
+sortColsByName <- function(x)
+{
+     setcolorder(x, sort(names(x)))
 }
 
 standardizeWideData <- function(x)
 {
+     removeNoVarianceCols(x)
      x[,lapply(.SD, function(x){if(is.numeric(x)){return(scale(x))}else{return(x)}})]
 }
 
 standardizeLongData <- function(x)
 {
+     x <- removeNoVarianceMeasurements(x)
      x[,Value:=scale(Value),by=c('MaskChannel','ImageChannel','Measurement')]
+     return(x)
 }
 
 getAllColNamesExcept <- function(x, names)
@@ -89,4 +171,6 @@ replaceCharacterInColNames <- function(x, old, new)
 {
      names(x) <- gsub(old, new, names(x))
 }
+
+
 
