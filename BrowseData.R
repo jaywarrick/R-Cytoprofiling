@@ -16,33 +16,25 @@ x1$Id <- as.character(x1$Id)
 x2 <- removeMeasurementNamesContaining(x1, "Phase_Order_2_Rep_0")
 x2 <- removeMeasurementNamesContaining(x2, "Phase_Order_4_Rep_0")
 x3 <- standardizeLongData(x2)
-diffs1 <- getDifferences(x1)
-x3 <- getWideTable(diffs)
-standardizeWideData(x3)
-x4 <- merge(x2, x3, by=getAllColNamesExcept(x1, 'Value'))
-x3$Measurement <- paste(x3$Measurement, x3$MaskChannel, x3$ImageChannel, sep='_')
-x3[,MaskChannel:=NULL]
-x3[,ImageChannel:=NULL]
-x4 <- getWideTable(x3)
+diffs <- getDifferences(x3)
+standardizeLongData(diffs)
+x4 <- rbindlist(list(x3,diffs), use.names = TRUE)
+x4$Measurement <- paste(x4$Measurement, x4$MaskChannel, x4$ImageChannel, sep='_')
+x4[,MaskChannel:=NULL]
+x4[,ImageChannel:=NULL]
+x5 <- getWideTable(x4)
 
 
 # Fix a few things for plotting etc
-x4$ImRow <- as.numeric(as.character(x4$ImRow))
-x4$ImCol <- as.numeric(as.character(x4$ImCol))
-replaceCharacterInColNames(x4, '\\$', '.')
-x4$cId <- paste0(x4$Id, ' RC[', x4$ImRow, ',', x4$ImCol, ']')
-x4$cId <- paste0(x4$Id, ' RC[', x4$ImRow, ',', x4$ImCol, ']')
-x4 <- sortColsByName(x4)
-shinyData <- x4
-
-colsToRemove <- x4[,lapply(.SD, function(x){length(which(is.na(x)))>0})]
-colsToRemove <- names(colsToRemove)[which(as.logical(as.vector(colsToRemove)))]
-x4[,(colsToRemove):=NULL]
-x4$Class <- as.factor(x4$Class)
-
-# Get rid of spaces in names and colons as well.
-names(shinyData) <- gsub(' ', '', names(shinyData))
-names(shinyData) <- gsub(':', '_', names(shinyData))
+x5$ImRow <- as.numeric(as.character(x5$ImRow))
+x5$ImCol <- as.numeric(as.character(x5$ImCol))
+replaceCharacterInColNames(x5, '\\$', '.')
+x5$cId <- paste0(x5$Id, ' RC[', x5$ImRow, ',', x5$ImCol, ']')
+x5$cId <- paste0(x5$Id, ' RC[', x5$ImRow, ',', x5$ImCol, ']')
+names(x5) <- gsub(' ', '', names(x5))
+names(x5) <- gsub(':', '_', names(x5))
+x5 <- sortColsByName(x5)
+shinyData <- x5
 
 # Look at the data
 browseShinyData()

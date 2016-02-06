@@ -1,4 +1,5 @@
 library(data.table)
+library(foreign)
 
 browseShinyData <- function()
 {
@@ -172,5 +173,49 @@ replaceCharacterInColNames <- function(x, old, new)
      names(x) <- gsub(old, new, names(x))
 }
 
+getXYCSVTableListFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+{
+     ret <- list()
+     fList <- list.files(path = dir, recursive = TRUE)
+     for(f in fList)
+     {
+          if((grepl('x', f) || grepl('y', f)) & grepl('.csv', f))
+          {
+               fileName <- strsplit(f, "\\.")[[1]][1]
+               xy <- strsplit(fileName, "_")[[1]]
+               y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
+               x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
+               xVal <- eval(parse(text=xExpression))
+               yVal <- eval(parse(text=yExpression))
+               theTable <- read.arff(file.path(dir, f))
+               theTable[,xName] <- xVal
+               theTable[,yName] <- yVal
+               ret[[fileName]] <- data.table(theTable)
+          }
+     }
+     return(ret)
+}
 
+getXYArffTableListFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+{
+     ret <- list()
+     fList <- list.files(path = dir, recursive = TRUE)
+     for(f in fList)
+     {
+          if((grepl('x', f) || grepl('y', f)) & grepl('.arff', f))
+          {
+               fileName <- strsplit(f, "\\.")[[1]][1]
+               xy <- strsplit(fileName, "_")[[1]]
+               y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
+               x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
+               xVal <- eval(parse(text=xExpression))
+               yVal <- eval(parse(text=yExpression))
+               theTable <- read.arff(file.path(dir, f))
+               theTable[,xName] <- xVal
+               theTable[,yName] <- yVal
+               ret[[fileName]] <- data.table(theTable)
+          }
+     }
+     return(ret)
+}
 
