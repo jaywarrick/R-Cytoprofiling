@@ -2,17 +2,15 @@ rm(list=ls())
 source('D:/GitHub/R-General/.Rprofile')
 sourceGitHubFile(user='jaywarrick', repo='R-Cytoprofiling', branch='master', file='PreProcessingHelpers.R')
 
-library(foreign)
-fileTable <- read.arff('/Volumes/JEX Cruncher/JEX Databases/Dominique/temp/JEXData0000000000.arff')
+x1 <- getXYArffAsTable(dir='D:/Jay/ValidationDataset/Validation/File - Output ARFF Table', file='x19_y0.arff')
 
 # Preprocess the data
-x1a <- fread(fileTable$Value[1])
-x1a$Class <- 'MT'
-x1b <- fread(fileTable$Value[2])
-x1b$Class <- 'WT'
 x1 <- rbindlist(list(x1a,x1b), use.names = TRUE)
 setorder(x1, Id, Label, MaskChannel, Measurement, ImageChannel)
 x1$Id <- as.character(x1$Id)
+x1$'NUCLEAR LOCALIZATION' <- as.character(x1$'NUCLEAR LOCALIZATION')
+x1$'NUCLEAR RADIUS' <- as.character(x1$'NUCLEAR RADIUS')
+x1[,c('BLUR','SNR'):=NULL]
 x2 <- removeMeasurementNamesContaining(x1, "Phase_Order_2_Rep_0")
 x2 <- removeMeasurementNamesContaining(x2, "Phase_Order_4_Rep_0")
 x3 <- standardizeLongData(x2)
@@ -22,16 +20,14 @@ x4 <- rbindlist(list(x3,diffs), use.names = TRUE)
 x4$Measurement <- paste(x4$Measurement, x4$MaskChannel, x4$ImageChannel, sep='_')
 x4[,MaskChannel:=NULL]
 x4[,ImageChannel:=NULL]
+x4$'NUCLEAR LOCALIZATION' <- as.numeric(x4$'NUCLEAR LOCALIZATION')
+x4$'NUCLEAR RADIUS' <- as.numeric(x4$'NUCLEAR RADIUS')
 x4 <- fixColNames(x4)
 x5 <- getWideTable(x4)
 
 
 # Fix a few things for plotting etc
-x5$ImRow <- as.numeric(as.character(x5$ImRow))
-x5$ImCol <- as.numeric(as.character(x5$ImCol))
-x5$cId <- paste0(x5$Id, ' RC[', x5$ImRow, ',', x5$ImCol, ']')
-x5$cId <- paste0(x5$Id, ' RC[', x5$ImRow, ',', x5$ImCol, ']')
-fixColNames(x5)
+x5 <- fixColNames(x5)
 x5 <- sortColsByName(x5)
 shinyData <- x5
 
@@ -45,12 +41,3 @@ library(randomForest)
 dataToTest <- shinyData
 dataToTest[, c('cId','Id','Label','ImCol','ImRow','Z'):=NULL]
 rf <- randomForest(Class ~ ., dataToTest)
-
-library(Hmisc)
-# Make the image indicies
-shinyData$index1 <- shinyData$ImRow + shinyData$ImCol*max(shinyData$ImRow)
-mt <- dataToTest[Class=='MT']
-wt <- dataToTest[Class=='WT']
-
-X <- dataToTest[,get(c('ImRow'))]
-

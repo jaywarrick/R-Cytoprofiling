@@ -148,9 +148,17 @@ standardizeWideData <- function(x)
 
 standardizeLongData <- function(x)
 {
-     x <- removeNoVarianceMeasurements(x)
+     # x <- removeNoVarianceMeasurements(x)
      x[,Value:=scale(Value),by=c('MaskChannel','ImageChannel','Measurement')]
      return(x)
+}
+
+fixColNames <- function(x)
+{
+	replaceCharacterInColNames(x, ' ', '')
+	replaceCharacterInColNames(x, '\\$', '.')
+	replaceCharacterInColNames(x, ':', '_')
+	return(x)
 }
 
 getAllColNamesExcept <- function(x, names)
@@ -173,7 +181,7 @@ replaceCharacterInColNames <- function(x, old, new)
      names(x) <- gsub(old, new, names(x))
 }
 
-getXYCSVTableListFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+getXYCSVsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
 {
      ret <- list()
      fList <- list.files(path = dir, recursive = TRUE)
@@ -181,22 +189,30 @@ getXYCSVTableListFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yNam
      {
           if((grepl('x', f) || grepl('y', f)) & grepl('.csv', f))
           {
-               fileName <- strsplit(f, "\\.")[[1]][1]
-               xy <- strsplit(fileName, "_")[[1]]
-               y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
-               x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
-               xVal <- eval(parse(text=xExpression))
-               yVal <- eval(parse(text=yExpression))
-               theTable <- read.arff(file.path(dir, f))
-               theTable[,xName] <- xVal
-               theTable[,yName] <- yVal
-               ret[[fileName]] <- data.table(theTable)
+          	fileName <- strsplit(f, "\\.")[[1]][1]
+          	ret[[fileName]] <- getXYCSVAsTable(dir, f, xName, xExpression, yName, yExpression)
           }
      }
-     return(ret)
+     retTable <- rbindlist(ret)
+     return(retTable)
 }
 
-getXYArffTableListFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+getXYCSVAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+{
+	fileName <- strsplit(file, "\\.")[[1]][1]
+	xy <- strsplit(fileName, "_")[[1]]
+	y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
+	x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
+	xVal <- eval(parse(text=xExpression))
+	yVal <- eval(parse(text=yExpression))
+	print(paste0('Reading ', file.path(dir,file), ' as ', xName, '=', xVal, ', ', yName, '=', yVal, '.'))
+	theTable <- fread(file.path(dir,file))
+	theTable[,(xName),with=FALSE] <- xVal
+	theTable[,(yName),with=FALSE] <- yVal
+	return(theTable)
+}
+
+getXYArffsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
 {
      ret <- list()
      fList <- list.files(path = dir, recursive = TRUE)
@@ -205,17 +221,25 @@ getXYArffTableListFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yNa
           if((grepl('x', f) || grepl('y', f)) & grepl('.arff', f))
           {
                fileName <- strsplit(f, "\\.")[[1]][1]
-               xy <- strsplit(fileName, "_")[[1]]
-               y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
-               x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
-               xVal <- eval(parse(text=xExpression))
-               yVal <- eval(parse(text=yExpression))
-               theTable <- read.arff(file.path(dir, f))
-               theTable[,xName] <- xVal
-               theTable[,yName] <- yVal
-               ret[[fileName]] <- data.table(theTable)
+               ret[[fileName]] <- getXYArffAsTable(dir, f, xName, xExpression, yName, yExpression)
           }
      }
-     return(ret)
+     retTable <- rbindlist(ret)
+     return(retTable)
+}
+
+getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+{
+	fileName <- strsplit(file, "\\.")[[1]][1]
+	xy <- strsplit(fileName, "_")[[1]]
+	y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
+	x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
+	xVal <- eval(parse(text=xExpression))
+	yVal <- eval(parse(text=yExpression))
+	print(paste0('Reading ', file.path(dir,file), ' as ', xName, '=', xVal, ', ', yName, '=', yVal, '.'))
+	theTable <- read.arff(file.path(dir,file))
+	theTable[,xName] <- xVal
+	theTable[,yName] <- yVal
+	return(data.table(theTable))
 }
 
