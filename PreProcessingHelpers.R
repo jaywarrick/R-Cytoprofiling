@@ -8,7 +8,7 @@ browseShinyData <- function()
      shinyApp(ui=myUI, server=myServer)
 }
 
-getComboNames <- function(x, prefix='')
+getComboNames <- function(x, prefix='_')
 {
      if(length(x) < 2)
      {
@@ -17,7 +17,7 @@ getComboNames <- function(x, prefix='')
      temp <- combn(x, 2)
      #print(temp)
      temp <- paste0(temp[1,],"_minus_",temp[2,])
-     temp <- paste0(prefix, '_', temp)
+     temp <- paste0(prefix, temp)
      return(temp)
 }
 
@@ -88,22 +88,32 @@ removeNoVarianceCols <- function(x)
      }
 }
 
-getNoVarianceMeasurements <- function(x)
+testFunc2 <- function(x, measurement)
 {
-     tempSD <- function(x){sd(x, na.rm=TRUE)}
-     temp <- x[,lapply(.SD, tempSD),.SDcols=getNumericCols(x),by=c('MaskChannel','ImageChannel','Measurement')]
-     return(unique(temp[Value==0]$Measurement))
+     sdx <- sd(x, na.rm=TRUE)
+     if(is.na(sdx) || sdx == 0 || is.nan(sdx))
+     {
+          print(paste0("Removing zero variance measure: ", measurement, '.'))
+          return(NULL)
+     }else
+     {
+          return(x)
+     }
 }
+duh2 <- data.table(a=rep(1:3,each=3), b=c(1:3,c(1,1,1),1:3), c=c('a','b','c','d','e','f','g','h','i'))
+duh2[,list(Value=testFunc2(b, a)), by=c('a')]
 
 removeNoVarianceMeasurements <- function(x)
 {
-     msToRemove <- getNoVarianceMeasurements(x)
-     print('Removing the following Measurements with zero variance...')
-     for(m in msToRemove)
-     {
-          print(m)
-     }
-     return(x[!(Measurement %in% msToRemove)])
+     # Get a vector with
+     temp <- x[,list(stdev=sd(Value)), by=c('MaskChannel','ImageChannel','Measurement')]
+     temp <- data.frame(temp[stdev == 0])
+     print("Removing measurements with 0 variance...")
+     print(temp)
+     x[,stdev:=sd(Value), by=c('MaskChannel','ImageChannel','Measurement')]
+     x <- x[stdev != 0]
+     x[, stdev:=NULL]
+     return(x)
 }
 
 getNoVarianceCols <- function(x)
@@ -148,16 +158,34 @@ standardizeWideData <- function(x)
 
 standardizeLongData <- function(x)
 {
-     # x <- removeNoVarianceMeasurements(x)
+     x <- removeNoVarianceMeasurements(x)
      x[,Value:=scale(Value),by=c('MaskChannel','ImageChannel','Measurement')]
+     return(x)
+}
+
+replaceStringInMeasurementNames <- function(x, old, new)
+{
+     x[,Measurement:=gsub(old,new,Measurement)]
+     return(x)
+}
+
+fixMeasurementNames <- function(x)
+{
+     #      x <- replaceStringInMeasurementNames(x, ' ', '')
+     #      x <- replaceStringInMeasurementNames(x, '\\$', '.')
+     #      x <- replaceStringInMeasurementNames(x, ':', '_')
+     #      return(x)
+     x[,Measurement:=gsub(' ','',Measurement)]
+     x[,Measurement:=gsub('\\$','.',Measurement)]
+     x[,Measurement:=gsub(':','_',Measurement)]
      return(x)
 }
 
 fixColNames <- function(x)
 {
-	replaceCharacterInColNames(x, ' ', '')
-	replaceCharacterInColNames(x, '\\$', '.')
-	replaceCharacterInColNames(x, ':', '_')
+	replaceStringInColNames(x, ' ', '')
+	replaceStringInColNames(x, '\\$', '.')
+	replaceStringInColNames(x, ':', '_')
 	return(x)
 }
 
@@ -176,7 +204,7 @@ getNonNumericCols <- function(x)
      return(names(x)[!unlist(x[,lapply(.SD, is.numeric)])])
 }
 
-replaceCharacterInColNames <- function(x, old, new)
+replaceStringInColNames <- function(x, old, new)
 {
      names(x) <- gsub(old, new, names(x))
 }
