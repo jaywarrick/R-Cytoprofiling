@@ -4,24 +4,27 @@ source('~/.Rprofile')
 sourceGitHubFile(user='jaywarrick', repo='R-Cytoprofiling', branch='master', file='PreProcessingHelpers.R')
 
 library(foreign)
-fileTable <- read.arff('/Volumes/JEX Cruncher/JEX Databases/Dominique/temp/JEXData0000000000.arff')
 
+dataMT <- getData(db='/Volumes/JEX Cruncher/JEX Databases/Dominique', ds='Mutant vs WT', x=0, y=0, type='File', name='Output CSV Table')
+dataWT <- getData(db='/Volumes/JEX Cruncher/JEX Databases/Dominique', ds='Mutant vs WT', x=1, y=0, type='File', name='Output CSV Table')
+dataFE <- getData(db='/Users/jaywarrick/Documents/JEX/Feature Extraction', ds='Dataset Name', x=0, y=0, type='File', name='Output CSV Table')
 ##### DATA PREPROCESSING #####
 
 # Read in the data into a single table
-x1a <- fread(fileTable$Value[1])
+x1a <- fread('/Users/jaywarrick/Desktop/A Sandbox/JEXData0000000003.csv')
+x1a <- fread(dataMT$fileList[1])
 x1a$Class <- 'MT'
-x1b <- fread(fileTable$Value[2])
+fixColNames(x1a)
+fixNames(x1a, c('Measurement','ImageChannel','MaskChannel'))
+x1b <- fread(dataWT$fileList[1])
 x1b$Class <- 'WT'
+fixColNames(x1b)
+fixNames(x1b, c('Measurement','ImageChannel','MaskChannel'))
 x1 <- rbindlist(list(x1a,x1b), use.names = TRUE)
-
-# Fix some naming issues from ImageJ
-x1 <- fixColNames(x1)
-x1 <- fixMeasurementNames(x1)
 
 # Make things easier to peruse
 setorder(x1, Id, Label, MaskChannel, Measurement, ImageChannel)
-x1$Id <- as.character(x1$Id) # Void standardizing the Id
+x1$Id <- as.character(x1$Id) # Avoid standardizing the Id
 
 # Remove measures that vascilate between 180 deg and 0 deg (i.e., no diff but numberwise they have a non-zero difference)
 x2 <- removeMeasurementNamesContaining(x1, "Phase_Order_2_Rep_0")
@@ -66,7 +69,9 @@ x5$cId <- paste0(x5$Id, ' RCClass[', x5$ImRow, ',', x5$ImCol, ',', x5$Class, ']'
 
 # Perform final sorting of columns of data for easier perusing
 x5 <- sortColsByName(x5)
-shinyData <- x5
+replaceStringInColNames(x5,"net.imagej.ops.Ops.","")
+shinyData[,lapply(.SD, function(x){if(is.factor(x)){return(as.factor(x))}else{return(x)}})]
+shinyData <- copy(x5)
 
 # Write the data for potential analysis outside R
 write.csv(shinyData, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/test.csv')
@@ -81,23 +86,31 @@ library(randomForest)
 dataToTest <- shinyData
 dataToTest[, c('cId','Id','Label','ImCol','ImRow','Z'):=NULL]
 
-# The 560 channel is potentiall suspect due to image acquistion issues. Remove to avoid potential bias.
-dataToTest <- removeColNamesContaining(dataToTest, "560")
+# The 560 channel is potentially suspect due to image acquistion issues. Remove to avoid potential bias.
+# dataToTest <- removeColNamesContaining(dataToTest, "560")
 dataToTest$Class <- as.factor(dataToTest$Class)
+# For now remove features that contain any infinte values
+dataToTest[,lapply(.SD, function(x){length(which(!is.finite(x))) > 0}), .SDcols=getNumericCols(dataToTest)]
 
 # Set the random seed to reproduce results
 set.seed(416)
 
 # Learn the trees
-rf <- randomForest(formula= Class ~ ., data=dataToTest, ntree=50, maxnodes=3, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
-
-# Get an ordered table of importances (accuracy and gini)
-rfImp <- data.frame(rf$importance)
-rfImp <- rfImp[order(rfImp$MeanDecreaseAccuracy, decreasing=TRUE),]
+rf <- randomForest(formula= Class ~ ., data=dataToTest, ntree=25, mtry=100, maxnodes=15, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
 
 # Creat interactive plot to browse importance results
 library(plotly)
+rfImp <- data.frame(rf$importance)
+rfImp$name <- row.names(rfImp)
+rfImp <- rfImp[order(rfImp$MeanDecreaseAccuracy, decreasing=TRUE),]
 plot_ly(rfImp, mode='markers', x=row.names(rfImp), y=rfImp$MeanDecreaseAccuracy, text=row.names(rfImp))
+layout(hovermode="closest")
+rfImp[1:25,c('name','MeanDecreaseAccuracy')]
+
+duh <- dataToTest[,lapply(.SD, function(x){length(which(!is.finite(x))) > 0}), .SDcols=getNumericCols(dataToTest)]
+duh2 <- getNumericCols(dataToTest)[as.logical(as.vector(duh))]
+which(!is.finite(dataToTest[[duh2[1]]]))
+
 
 ##### DEBUGGING & TESTS #####
 
@@ -134,3 +147,21 @@ x2[Measurement=='HistogramBin_13' & MaskChannel=='WholeCell']
 MADs <- shinyData[,lapply(.SD, mad, na.rm=TRUE), .SDcols=getNumericCols(shinyData)]
 SDs <- shinyData[,lapply(.SD, sd, na.rm=TRUE), .SDcols=getNumericCols(shinyData)]
 SDs$net.imagej.ops.Ops.Stats.StdDev_WholeCell_650X705M
+
+# Probability of flipping 57 heads out of 100 flips given a fair (0.5 fraction) coin is
+1-pbinom(57,100,0.5)
+
+duh <- copy(x1a)
+fixColNames(duh)
+fixNames(duh, col=c('MaskChannel','ImageChannel','Measurement'))
+replaceStringInAllRowsOfCol(duh,'Measurement',"net.imagej.ops.Ops.","")
+duh$Measurement <- paste(duh$Measurement, duh$MaskChannel, duh$ImageChannel, sep='_')
+duh[,c('MaskChannel','ImageChannel'):=NULL]
+duh <- getWideTable(duh)
+hist(duh$Stats.Mean_WholeCell_485X525M, breaks=100)
+plot_ly(mode='markers',x=duh$Stats.Mean_WholeCell_485X525M-500, y=duh$Stats.Mean_WholeCell_395X455M-500)
+layout(p, xaxis = list(type = "log"),
+       yaxis = list(type = "log"), hovermode="closest")
+shinyData <- duh
+shinyData$Class <- 'MT'
+shinyData[800:1600]$Class <- 'WT'

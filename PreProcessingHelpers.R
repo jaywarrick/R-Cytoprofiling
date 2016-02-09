@@ -76,6 +76,21 @@ getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName=
 
 ##### Wide Table Operations #####
 
+removeColsWithInfiniteVals <- function(x)
+{
+     duh <- x[,lapply(.SD, function(y){length(which(!is.finite(y))) > 0}), .SDcols=getNumericCols(x)]
+     duh2 <- getNumericCols(x)[as.logical(as.vector(duh))]
+     if(length(duh2 > 0))
+     {
+          print("Removing cols with infinite values...")
+     }
+     for(col in duh2)
+     {
+          print(col)
+          x[,(col):=NULL]
+     }
+}
+
 getColNamesContaining <- function(x, name)
 {
      return(names(x)[grepl(name,names(x))])
@@ -98,7 +113,6 @@ fixColNames <- function(x)
      replaceStringInColNames(x, ' ', '')
      replaceStringInColNames(x, '\\$', '.')
      replaceStringInColNames(x, ':', '_')
-     return(x)
 }
 
 getAllColNamesExcept <- function(x, names)
@@ -118,7 +132,9 @@ getNonNumericCols <- function(x)
 
 replaceStringInColNames <- function(x, old, new)
 {
-     names(x) <- gsub(old, new, names(x))
+     oldNames <- names(x)
+     newNames <- gsub(old, new, names(x))
+     setnames(x, oldNames, newNames)
 }
 
 getWideTable <- function(x)
@@ -253,22 +269,19 @@ removeNoVarianceMeasurements <- function(x, val='Value', by=c('MaskChannel','Ima
      return(y)
 }
 
-replaceStringInMeasurementNames <- function(x, old, new)
+replaceSubStringInAllRowsOfCol <- function(x, old, new, col)
 {
-     x[,Measurement:=gsub(old,new,Measurement)]
-     return(x)
+     x[,c(col):=gsub(old,new,get(col))]
 }
 
-fixMeasurementNames <- function(x)
+fixNames <- function(x, col)
 {
-     #      x <- replaceStringInMeasurementNames(x, ' ', '')
-     #      x <- replaceStringInMeasurementNames(x, '\\$', '.')
-     #      x <- replaceStringInMeasurementNames(x, ':', '_')
-     #      return(x)
-     x[,Measurement:=gsub(' ','',Measurement)]
-     x[,Measurement:=gsub('\\$','.',Measurement)]
-     x[,Measurement:=gsub(':','_',Measurement)]
-     return(x)
+     for(colName in col)
+     {
+          replaceSubStringInAllRowsOfCol(x,' ','',colName)
+          replaceSubStringInAllRowsOfCol(x,'\\$','.',colName)
+          replaceSubStringInAllRowsOfCol(x,':','_',colName)
+     }
 }
 
 ##### Feature Calculations #####
@@ -337,6 +350,13 @@ calculateRMSofHaralick <- function(x, removeOriginalHaralickMeasures=FALSE)
      }
 
      return(data.table(x))
+}
+
+getColors <- function(pointClasses)
+{
+     ret <- rep('rgb(0,0,1,0.2)', length(pointClasses))
+     ret[pointClasses == 'MT'] <- 'rgb(1,0,0,0.2)'
+     return(ret)
 }
 
 ##### Testing #####
