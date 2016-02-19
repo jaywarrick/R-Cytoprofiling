@@ -8,22 +8,32 @@ source('~/Public/DropBox/GitHub/R-Cytoprofiling/PreProcessingHelpers.R')
 library(data.table)
 library(foreign)
 
-dataMT <- getData(db='/Volumes/JEX Cruncher/JEX Databases/Dominique', ds='Mutant vs WT', x=0, y=0, type='File', name='Output CSV Table')
-dataWT <- getData(db='/Volumes/JEX Cruncher/JEX Databases/Dominique', ds='Mutant vs WT', x=1, y=0, type='File', name='Output CSV Table')
+fileList <- c('x0_y0.csv','x0_y1.csv','x0_y2.csv','x0_y3.csv','x0_y4.csv','x0_y5.csv','x0_y6.csv')
+# dataMT <- getData(db='/Volumes/JEX Cruncher/JEX Databases/Dominique', ds='Mutant vs WT', x=0, y=0, type='File', name='Output CSV Table')
+# dataWT <- getData(db='/Volumes/JEX Cruncher/JEX Databases/Dominique', ds='Mutant vs WT', x=1, y=0, type='File', name='Output CSV Table')
 # dataFE <- getData(db='/Users/jaywarrick/Documents/JEX/Feature Extraction', ds='Dataset Name', x=0, y=0, type='File', name='Output CSV Table')
 ##### DATA PREPROCESSING #####
 
 # Read in the data into a single table
 # x1a <- fread('/Users/jaywarrick/Desktop/A Sandbox/JEXData0000000003.csv')
-x1a <- fread(dataMT$fileList[1])
-x1a$Class <- 'MT'
-fixColNames(x1a)
-fixNames(x1a, c('Measurement','ImageChannel','MaskChannel'))
-x1b <- fread(dataWT$fileList[1])
-x1b$Class <- 'WT'
-fixColNames(x1b)
-fixNames(x1b, c('Measurement','ImageChannel','MaskChannel'))
-x1 <- rbindlist(list(x1a,x1b), use.names = TRUE)
+
+tableList <- list()
+for(i in 1:7)
+{
+     temp <- fread(file.path('/Users/jaywarrick/Documents/MMB/Projects/Dominique/x0_y6', fileList[i]))
+     if(i <= 4)
+     {
+          temp$Class <- 'WT'
+     }
+     else
+     {
+          temp$Class <- 'MT'
+     }
+     fixColNames(temp)
+     fixNames(temp, c('Measurement','ImageChannel','MaskChannel'))
+     tableList[[i]] <- copy(temp)
+}
+x1 <- rbindlist(tableList, use.names = TRUE)
 replaceSubStringInAllRowsOfCol(x1,'net.imagej.ops.Ops.','','Measurement')
 replaceSubStringInAllRowsOfCol(x1,'_Order_','','Measurement')
 replaceSubStringInAllRowsOfCol(x1,'_Rep_','','Measurement')
@@ -70,21 +80,13 @@ x5 <- getWideTable(x4)
 # Fix naming issues introduced by merging MaskChannel and ImageChannel names with Measurement name
 x5 <- fixColNames(x5)
 
-# Convert ImRow and ImCol to numeric for looking at locational correlations
-x5$ImRow <- as.numeric(as.character(x5$ImRow))
-x5$ImCol <- as.numeric(as.character(x5$ImCol))
-
-# Generate a more informative text string for pt labels in plotly
-x5$cId <- paste0(x5$Id, ' RCClass[', x5$ImRow, ',', x5$ImCol, ',', x5$Class, ']')
-x5$cId <- paste0(x5$Id, ' RCClass[', x5$ImRow, ',', x5$ImCol, ',', x5$Class, ']')
-
 # Perform final sorting of columns of data for easier perusing
 x5 <- sortColsByName(x5)
 # shinyData[,lapply(.SD, function(x){if(is.factor(x)){return(as.factor(x))}else{return(x)}})]
 shinyData <- copy(x5)
 
 # Write the data for potential analysis outside R
-write.csv(shinyData, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/shinyData.csv', row.names=FALSE)
+write.csv(shinyData, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/shinyData_Dom2.csv', row.names=FALSE)
 #shinyData <- read.csv(file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/test.csv')
 # Look at the data
 #browseShinyData()
@@ -101,16 +103,16 @@ removeColsWithInfiniteVals(dataToTest)
 dataToTest <- removeColNamesContaining(dataToTest, "560")
 dataToTest$Class <- as.factor(dataToTest$Class)
 
-write.csv(dataToTest, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/dataToTest.csv', row.names = FALSE)
+write.csv(dataToTest, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/dataToTest_Dom2.csv', row.names = FALSE)
 
 # Set the random seed to reproduce results
 set.seed(416)
 
 # Learn the trees
 
-#rf <- randomForest(formula= Class ~ ., data=dataToTest, ntree=100, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
+rf <- randomForest(formula= Class ~ ., data=dataToTest, ntree=100, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
 rf2 <- randomForest(formula= Class ~ ., data=dataToTest, ntree=25, maxnodes=10, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
-#rf3 <- randomForest(formula= Class ~ ., data=dataToTest, ntree=25, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
+rf3 <- randomForest(formula= Class ~ ., data=dataToTest, ntree=25, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
 # Creat interactive plot to browse importance results
 library(plotly)
 rfImp <- data.frame(rf2$importance)
@@ -125,11 +127,11 @@ which(grepl('Dot',rfImp$name))
 rfImp$name[which(grepl('Dot',rfImp$name))]
 
 i <- 1
-dir.create('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom1')
+dir.create('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom2')
 for(feature in rfImp$name[1:100])
 {
      temp <- gsub(".","_",feature, fixed=T)
-     filePath <- file.path('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom1',paste0(i, "_", temp,'.pdf'))
+     filePath <- file.path('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom2',paste0(i, "_", temp,'.pdf'))
      pdf(file=filePath, width=6, height=5)
      plotHist(shinyData,feature)
      dev.off()

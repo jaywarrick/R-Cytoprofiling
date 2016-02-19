@@ -10,6 +10,50 @@ browseShinyData <- function()
      shinyApp(ui=myUI, server=myServer)
 }
 
+plotHist <- function(x, feature)
+{
+     breaks=c(-1000, seq(-4,4,0.5), 1000)
+     wt <- x[Class == 'WT'][[feature]]
+     mt <- x[Class == 'MT'][[feature]]
+     cmt <- rgb(0,0,1,0.8)
+     cwt <- rgb(1,0,0,0.8)
+     wtd <- density(wt, from=-4, to=4)
+     mtd <- density(mt, from=-4, to=4)
+     if(max(wtd$y) > max(mtd$y))
+     {
+          plot(wtd, col='red', xlim=c(-4,4), main='', xlab=feature)
+          lines(mtd, col='blue')
+     }
+     else
+     {
+          plot(mtd, col='blue', xlim=c(-4,4), main='', xlab=feature)
+          lines(wtd, col='red')
+     }
+     legend('topright', legend=c('MT','WT'), col=c('blue','red'), lty=1)
+}
+
+##### General #####
+
+sind <- function(x)
+{
+     return(sin(x*pi/180))
+}
+
+cosd <- function(x)
+{
+     return(cos(x*pi/180))
+}
+
+tand <- function(x)
+{
+     return(tan(x*pi/180))
+}
+
+refactor <- function(x)
+{
+     return(x[,lapply(.SD, function(x){if(is.factor(x)){factor(x)}else{x}})])
+}
+
 ##### Table IO #####
 
 getXYCSVsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
@@ -75,6 +119,26 @@ getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName=
 }
 
 ##### Wide Table Operations #####
+
+removeExtraneousColumns <- function(x)
+{
+     dumbCols <- c(getColNamesContaining(x, 'Phase'), getColNamesContaining(x, 'ImageMoments.Moment'), getColNamesContaining(x, 'ImageMoments.HuMoment'), getColNamesContaining(x, 'ImageMoments.NormalizedCentralMoment'))#, getColNamesContaining(x, 'ImageMoments.CentralMoment'))
+     dumbCols <- unique(dumbCols)
+     print('Removing the following extraneous columns of information...')
+     for(colName in dumbCols)
+     {
+          print(colName)
+     }
+     x[,(dumbCols):=NULL]
+     return(x)
+}
+
+divideColAByColB <- function(x, colA, colB)
+{
+     x[get(colB)==0,(colA):=NA]
+     x[get(colB)!=0,(colA):=get(colA)/get(colB)]
+     return(x)
+}
 
 removeColsWithInfiniteVals <- function(x)
 {
@@ -184,6 +248,40 @@ getNoVarianceCols <- function(x)
 
 ##### Long Table Operations #####
 
+divideMAbyMBbyRef <- function(x, mA, mB)
+{
+     mATable <- x[Measurement==mA]
+     mBTable <- x[Measurement==mB]
+     ret <- mATable$Value / mBTable$Value
+     x[Measurement==mA]$Value <- ret
+     return(x)
+}
+
+intIntensityNormalizeCentralMoments <- function(x)
+{
+     mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
+     for(mName in mNames)
+     {
+          x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
+     }
+     return(x)
+}
+
+meanNormalizeZernikeMoments <- function(x)
+{
+     mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
+     for(mName in mNames)
+     {
+          x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean')
+     }
+     return(x)
+}
+
+getRowsMatching <- function(x, col, baseName)
+{
+     return(x[grepl(baseName, x[[col]])])
+}
+
 getLongTable <- function(x, idCols, measurementName='Measurement', valueName='Value')
 {
      return(melt(x, getAllColNamesExcept(x, idCols), variable.name=measurementName, value.name=valueName, na.rm=TRUE))
@@ -200,6 +298,16 @@ getMeasurementNamesContaining <- function(x, name)
      return(ms[grepl(name,ms)])
 }
 
+getMomentTable <- function(x, baseName='ImageMoments.CentralMoment')
+{
+     theNames <- unique(x[['Measurement']])
+     theNames <- theNames[grepl(baseName,theNames, fixed=TRUE)]
+     start <- nchar(baseName)
+     orders <- substr(theNames, start+1, start+2)
+     ret <- data.frame(Measurement=theNames, orderx=as.numeric(substr(orders,1,1)), ordery=as.numeric(substr(orders,2,2)))
+     return(ret)
+}
+
 removeMeasurementNamesContaining <- function(x, name)
 {
      namesToRemove <- getMeasurementNamesContaining(x, name)
@@ -214,13 +322,20 @@ removeMeasurementNamesContaining <- function(x, name)
 
 standardizeLongData <- function(x, by=c('MaskChannel','ImageChannel','Measurement'))
 {
-     robustScale <- function(x)
+     robustScale <- function(x, measurement)
      {
-          m <- median(x, na.rm=TRUE)
-          return((x-m)/mad(x, center=m, na.rm=TRUE))
+          if(substr(measurement,1,12) == 'ZernikePhase')
+          {
+               return(x)
+          }
+          else
+          {
+               m <- median(x, na.rm=TRUE)
+               return((x-m)/mad(x, center=m, na.rm=TRUE))
+          }
      }
      x <- removeNoMADMeasurements(x)
-     x[,Value:=robustScale(Value),by=by]
+     x[,Value:=robustScale(Value,Measurement),by=by]
      return(x)
 }
 
@@ -286,13 +401,19 @@ fixNames <- function(x, col)
 
 ##### Feature Calculations #####
 
+unmergeChannelNames <- function(channelString)
+{
+     temp <- unlist(strsplit(channelString,'_minus_',fixed=TRUE))
+     return(list(channel1=temp[1], channel2=temp[2]))
+}
+
 calculateChannelDifferences <- function(x)
 {
      if(length(unique(x$ImageChannel)) > 1)
      {
-          # Calculate differences between channels
+          # Calculate differences between channels for each Cell and Measurement (but keep other column information too so include other cols in 'by')
           idCols <- getAllColNamesExcept(x, c('Value','ImageChannel'))
-          x2 <- x[,list(ImageChannel=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols]
+          x2 <- x[ImageChannel != 'None' & !grepl('_dot_',ImageChannel,fixed=T),list(ImageChannel=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols]
      }else
      {
           # return an empty table with the same columns as provided
@@ -300,7 +421,22 @@ calculateChannelDifferences <- function(x)
      }
 }
 
-getComboNames <- function(x)
+# Meant to be called on a subset of the main table
+calculateChannelProducts <- function(x)
+{
+     if(length(unique(x$ImageChannel)) > 1)
+     {
+          # Calculate differences between channels for each Cell and Measurement (but keep other column information too so include other cols in 'by')
+          idCols <- getAllColNamesExcept(x, c('Value','ImageChannel'))
+          x2 <- x[ImageChannel != 'None',list(ImageChannel=getComboNames(ImageChannel, '_times_'), Value=getComboProducts(Value)), by=idCols]
+     }else
+     {
+          # return an empty table with the same columns as provided
+          return(x[FALSE])
+     }
+}
+
+getComboNames <- function(x, operation='_minus_')
 {
      if(length(x) < 2)
      {
@@ -308,7 +444,7 @@ getComboNames <- function(x)
      }
      temp <- combn(x, 2)
      #print(temp)
-     temp <- paste0(temp[1,],"_minus_",temp[2,])
+     temp <- paste0(temp[1,],operation,temp[2,])
      return(temp)
 }
 
@@ -320,6 +456,17 @@ getComboDifferences <- function(x)
      }
      temp <- combn(x, 2)
      temp <- temp[1,]-temp[2,]
+     return(temp)
+}
+
+getComboProducts <- function(x)
+{
+     if(length(x) < 2)
+     {
+          return(NULL)
+     }
+     temp <- combn(x, 2)
+     temp <- temp[1,]*temp[2,]
      return(temp)
 }
 
