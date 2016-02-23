@@ -34,6 +34,11 @@ plotHist <- function(x, feature)
 
 ##### General #####
 
+getLocsFromRCs <- function(r, c, numRows)
+{
+     r + max(numRows) * c
+}
+
 sind <- function(x)
 {
      return(sin(x*pi/180))
@@ -55,6 +60,46 @@ refactor <- function(x)
 }
 
 ##### Table IO #####
+
+getTableList <- function(dir, fileList, class, expt, numRows)
+{
+     tableList <- list()
+     for(f in fileList)
+     {
+          print(paste0('Reading file: ', file.path(dir, f)))
+          temp <- fread(file.path(dir, f))
+          temp$Class <- class
+          temp$Expt <- expt
+          if('Z' %in% names(temp))
+          {
+               temp[,Z:=NULL]
+          }
+          if('A' %in% names(temp))
+          {
+               temp[,A:=NULL]
+          }
+          if('B' %in% names(temp))
+          {
+               temp[,B:=NULL]
+          }
+          if(!('ImRow' %in% names(temp)))
+          {
+               temp$ImRow <- 1
+          }
+          if(!('ImCol' %in% names(temp)))
+          {
+               temp$ImCol <- 1
+          }
+          if(!('Loc' %in% names(temp)))
+          {
+               temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
+          }
+          temp[,ImRow:=NULL]
+          temp[,ImCol:=NULL]
+          tableList <- append(tableList, list(temp))
+     }
+     return(tableList)
+}
 
 getXYCSVsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
 {
