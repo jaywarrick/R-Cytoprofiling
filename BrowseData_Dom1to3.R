@@ -1,9 +1,15 @@
 rm(list=ls())
-source('~/.Rprofile')
-source('~/Public/DropBox/GitHub/R-Informatics-private/HuMoments.R')
-source('/Users/jaywarrick/Public/DropBox/GitHub/R-Informatics-private/Zernike.R')
-# source('D:/GitHub/R-General/.Rprofile')
-source('~/Public/DropBox/GitHub/R-Cytoprofiling/PreProcessingHelpers.R')
+
+source('D:/GitHub/R-General/.Rprofile')
+source('D:/GitHub/R-Informatics-private/HuMoments.R')
+source('D:/GitHub/R-Informatics-private/Zernike.R')
+source('D:/GitHub/R-Cytoprofiling/PreProcessingHelpers.R')
+
+# source('~/.Rprofile')
+# source('~/Public/DropBox/GitHub/R-Informatics-private/HuMoments.R')
+# source('/Users/jaywarrick/Public/DropBox/GitHub/R-Informatics-private/Zernike.R')
+# source('~/Public/DropBox/GitHub/R-Cytoprofiling/PreProcessingHelpers.R')
+
 #sourceGitHubFile(user='jaywarrick', repo='R-Cytoprofiling', branch='master', file='PreProcessingHelpers.R')
 library(data.table)
 library(foreign)
@@ -18,52 +24,79 @@ library(foreign)
 # B3,4,6 - WT SecOnly
 # B1,2,5 - NES SecOnly
 
-dir1 <- '/Volumes/Seagate Backup Plus Drive/Data Tables/Dominique 1'
+#dir1 <- '/Volumes/Seagate Backup Plus Drive/Data Tables/Dominique 1'
+dir1 <- 'G:/Data Tables/Dominique 1'
 MTFileList1 <- c('x0_y0.csv')
 WTFileList1 <- c('x1_y0.csv')
 
-dir2 <- '/Volumes/Seagate Backup Plus Drive/Data Tables/Dominique 2'
+#dir2 <- '/Volumes/Seagate Backup Plus Drive/Data Tables/Dominique 2'
+dir2 <- 'G:/Data Tables/Dominique 2'
 MTFileList2 <- c('x0_y0.csv','x0_y1.csv','x0_y2.csv','x0_y3.csv')
 WTFileList2 <- c('x0_y4.csv','x0_y5.csv','x0_y6.csv')
 
-dir3 <- '/Volumes/Seagate Backup Plus Drive/Data Tables/Dominique 3'
-MTFileList3 <- c('x0_y3.csv','x0_y4.csv','x0_y5.csv','x1_y6.csv','x1_y7.csv','x1_y8.csv')
-WTFileList3 <- c('x0_y0.csv','x0_y1.csv','x0_y2.csv','x1_y9.csv','x1_y10.csv','x1_y11.csv')
+#dir3 <- '/Volumes/Seagate Backup Plus Drive/Data Tables/Dominique 3'
+dir3 <- 'G:/Data Tables/Dominique 3'
+MTFileList3 <- c('x0_y3.csv','x0_y4.csv','x0_y5.csv')#,'x1_y6.csv','x1_y7.csv','x1_y8.csv')
+WTFileList3 <- c('x0_y0.csv','x0_y1.csv','x0_y2.csv')#,'x1_y9.csv','x1_y10.csv','x1_y11.csv')
 ##### DATA PREPROCESSING #####
 
+set.seed(1234)
+n <- 3000
 tableList <- list()
-tableList <- append(tableList, getTableList(dir1, MTFileList1, 'MT', expt=1, numRows = 1))
-tableList <- append(tableList, getTableList(dir1, WTFileList1, 'WT', expt=1, numRows = 1))
-tableList <- append(tableList, getTableList(dir2, MTFileList2, 'MT', expt=2, numRows = 7))
-tableList <- append(tableList, getTableList(dir2, WTFileList2, 'WT', expt=2, numRows = 7))
-tableList <- append(tableList, getTableList(dir3, MTFileList3, 'MT', expt=3, numRows = 12))
-tableList <- append(tableList, getTableList(dir3, WTFileList3, 'WT', expt=3, numRows = 12))
+tableList <- append(tableList, getTableList(dir1, MTFileList1, 'MT', expt=1, sampleSize = n))
+tableList <- append(tableList, getTableList(dir1, WTFileList1, 'WT', expt=1, sampleSize = n))
+tableList <- append(tableList, getTableList(dir2, MTFileList2, 'MT', expt=2, sampleSize = n))
+tableList <- append(tableList, getTableList(dir2, WTFileList2, 'WT', expt=2, sampleSize = n))
+tableList <- append(tableList, getTableList(dir3, MTFileList3, 'MT', expt=3, sampleSize = n))
+tableList <- append(tableList, getTableList(dir3, WTFileList3, 'WT', expt=3, sampleSize = n))
 x1 <- rbindlist(tableList, use.names=TRUE)
-replaceSubStringInAllRowsOfCol(x1,'net.imagej.ops.Ops.','','Measurement')
-replaceSubStringInAllRowsOfCol(x1,'_Order_','','Measurement')
-replaceSubStringInAllRowsOfCol(x1,'_Rep_','','Measurement')
+# Check number sampled
+#length(unique(x1$cId[grepl('2.x',x1$cId,fixed=T) & x1$Class=='MT']))
+fixColNames(x1)
 
 # Make things easier to peruse
-setorder(x1, Id, Label, MaskChannel, Measurement, ImageChannel)
+setorder(x1, Expt, file, Id, Label, MaskChannel, Measurement, ImageChannel)
 x1$Id <- as.character(x1$Id) # Avoid standardizing the Id
 
-save(x1, file='/Volumes/Seagate Backup Plus Drive/Data Tables/x1.Rdata')
+save(x1, file='/Volumes/Seagate Backup Plus Drive/Data Tables/x1_sampled.Rdata')
+save(x1, file='G:/Data Tables/x1_sampled.Rdata')
+
+load(file='G:/Data Tables/x1_sampled.Rdata')
+set.seed(1234)
+x1b <- fixLongTableStringsInCol(x1, 'Measurement')
+#x1b <- removeMeasurementNamesContaining(x1b,'DNZ')
+#x1b <- removeMeasurementNamesContaining(x1b,'NUCw')
+x1b <- removeMeasurementNamesContaining(x1b,'ZernikeCircleX')
+x1b <- removeMeasurementNamesContaining(x1b,'ZernikeCircleY')
+x1b <- removeMeasurementNamesContaining(x1b,'DNZernikeInnerCircleX')
+x1b <- removeMeasurementNamesContaining(x1b,'DNZernikeOuterCircleY')
+x1b <- replaceSubStringInAllRowsOfCol(x1b, '395 X 455M', '390 X 440', 'ImageChannel')
+x1b <- replaceSubStringInAllRowsOfCol(x1b, '485 X 525 M', '485 X 525', 'ImageChannel')
+x1b <- replaceSubStringInAllRowsOfCol(x1b, '560 X 607 M', '560 X 607', 'ImageChannel')
+x1b <- replaceSubStringInAllRowsOfCol(x1b, '650 X 705 M', '648 X 684', 'ImageChannel')
+x1b <- x1b[ImageChannel != '560 X 607']
+#x1b <- x1b[MaskChannel == 'WholeCell']
+
+# Get rid of cells that have some NA data
+naData <- unique(x1b[!is.finite(Value)]$cId)
+x1b <- x1b[!(cId %in% naData)]
+goodData <- unique(x1b[Measurement == 'ZernikeMag11_NUCwFIXED']$cId)
+x1b <- x1b[(cId %in% goodData)]
 
 # Do some calculations
-x2 <- copy(x1)
-x2 <- intIntensityNormalizeCentralMoments(x2)
+x2 <- intIntensityNormalizeCentralMoments(x1b)
 x2 <- meanNormalizeZernikeMoments(x2)
 x2 <- calculateHuMoments(x2)
 x2 <- calculateZernikeDotProduct(x2)
 
 # Tempororarily make the table wide to calculate averages of Haralick over the different directions
 x2b <- getWideTable(x2)
-x2b <- calculateRMSofHaralick(x2b)
+x2b <- calculateRMSofHaralick(x2b) 
 x2b <- removeExtraneousColumns(x2b)
 
 # Get our long table back and reorder
 x3 <- getLongTableFromTemplate(x2b, x2)
-setorder(x3, Id, Label, MaskChannel, Measurement, ImageChannel)
+setorder(x3, Expt, file, Id, Label, MaskChannel, Measurement, ImageChannel)
 
 # Perform robust standardization (x-median)/mad (entertain idea of not applying to histogram bins)
 x3 <- standardizeLongData(x3)
@@ -92,8 +125,11 @@ x5 <- sortColsByName(x5)
 # shinyData[,lapply(.SD, function(x){if(is.factor(x)){return(as.factor(x))}else{return(x)}})]
 shinyData <- copy(x5)
 
+getNumericCols(shinyData)[as.logical(as.vector(shinyData[,lapply(.SD, function(x){length(which(!is.finite(x)))>0}),.SDcols=getNumericCols(shinyData)]))]
+
 # Write the data for potential analysis outside R
-write.csv(shinyData, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/shinyData_Dom2.csv', row.names=FALSE)
+#write.csv(shinyData, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/shinyData_Dom3.csv', row.names=FALSE)
+write.csv(shinyData, file='G:/Data Tables/shinyData_Dom1to3_r1234.csv', row.names=FALSE)
 #shinyData <- read.csv(file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/test.csv')
 # Look at the data
 #browseShinyData()
@@ -102,25 +138,32 @@ write.csv(shinyData, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cyt
 library(randomForest)
 
 # Need to remove names like Id, Label, ImRow, ImCol, Z,
-dataToTest <- shinyData
-dataToTest[, c('cId','Id','Label','ImCol','ImRow','Z'):=NULL]
+dataToTest <- shinyData[Expt==1]
+dataToTest[, c('cId','Id','Label','ImCol','ImRow','Z','Loc','file','Expt'):=NULL]
 removeColsWithInfiniteVals(dataToTest)
-
-# The 560 channel is potentially suspect due to image acquistion issues. Remove to avoid potential bias.
-dataToTest <- removeColNamesContaining(dataToTest, "560")
 dataToTest$Class <- as.factor(dataToTest$Class)
 
-write.csv(dataToTest, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/dataToTest_Dom2.csv', row.names = FALSE)
+dataToTrain <- shinyData[Expt==3]
+dataToTrain[, c('cId','Id','Label','ImCol','ImRow','Z','Loc','file','Expt'):=NULL]
+removeColsWithInfiniteVals(dataToTrain)
+dataToTrain$Class <- as.factor(dataToTrain$Class)
+
+#write.csv(dataToTest, file='/Users/jaywarrick/Documents/MMB/Grants/2016 - RO1 Cytoprofiling/dataToTest_Dom2.csv', row.names = FALSE)
+write.csv(dataToTest, file='G:/Data Tables/dataToTest_Dom1to3_r1234.csv', row.names = FALSE)
+
+dataToTest <- fread('G:/Data Tables/dataToTest_Dom1to3_r1234.csv')
 
 # Set the random seed to reproduce results
-set.seed(416)
+set.seed(1234)
 
 # Learn the trees
 
-rf <- randomForest(formula= Class ~ ., data=dataToTest, ntree=100, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
-rf2 <- randomForest(formula= Class ~ ., data=dataToTest, ntree=25, maxnodes=10, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
-rf3 <- randomForest(formula= Class ~ ., data=dataToTest, ntree=25, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
+rf <- randomForest(formula= Class ~ ., data=dataToTrain, ntree=100, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
+rf2 <- randomForest(formula= Class ~ ., data=dataToTrain, ntree=25, maxnodes=5, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
+rf3 <- randomForest(formula= Class ~ ., data=dataToTrain, ntree=25, importance=TRUE, proximity=TRUE, do.trace=TRUE, keep.forest=TRUE)
 # Creat interactive plot to browse importance results
+
+length(which(predict(rf2, dataToTest)==dataToTest$Class))/nrow(dataToTest)
 library(plotly)
 rfImp <- data.frame(rf2$importance)
 rfImp$name <- row.names(rfImp)
@@ -134,19 +177,27 @@ which(grepl('Dot',rfImp$name))
 rfImp$name[which(grepl('Dot',rfImp$name))]
 
 i <- 1
-dir.create('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom2')
+#dir.create('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom1to3_r1234')
+dir.create('G:/Data Tables/Dom1to3_r1234')
 for(feature in rfImp$name[1:100])
 {
-     temp <- gsub(".","_",feature, fixed=T)
-     filePath <- file.path('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom2',paste0(i, "_", temp,'.pdf'))
-     pdf(file=filePath, width=6, height=5)
-     plotHist(shinyData,feature)
-     dev.off()
-     i <- i + 1
+	temp <- gsub(".","_",feature, fixed=T)
+	#filePath <- file.path('/Users/jaywarrick/Documents/MMB/Projects/Dominique/Dom2',paste0(i, "_", temp,'.pdf'))
+	filePath <- file.path('G:/Data Tables/Dom1to3_r1234',paste0(i, "_", temp,'.pdf'))
+	pdf(file=filePath, width=6, height=5)
+	plotHist(shinyData,feature)
+	dev.off()
+	i <- i + 1
 }
+plotHist(x5,'ZernikeDot40_THISwSEC_WholeCell_390X440_dot_648X684')
+plotHist(x5,'ZernikeDot20_THISwSEC_WholeCell_390X440_dot_648X684')
+plotHist(x5,'Geometric.SizeIterable_')
 
 
 ##### DEBUGGING & TESTS #####
+
+names(dataToTest)[as.logical(as.vector(dataToTest[,lapply(.SD, function(x){length(which(is.na(x)))>1})]))]
+names(dataToTest)[as.logical(as.vector(dataToTest[,lapply(.SD, function(x){length(which(is.null(x)))>1})]))]
 
 #### Test for index issue #####
 order1 <- data.table(ImRow=0:5, ImCol=rep(0:5, each=6), index1=0:35)
@@ -196,7 +247,7 @@ duh <- getWideTable(duh)
 hist(duh$Stats.Mean_WholeCell_485X525M, breaks=100)
 plot_ly(mode='markers',x=duh$Stats.Mean_WholeCell_485X525M-500, y=duh$Stats.Mean_WholeCell_395X455M-500)
 layout(p, xaxis = list(type = "log"),
-       yaxis = list(type = "log"), hovermode="closest")
+	  yaxis = list(type = "log"), hovermode="closest")
 shinyData <- duh
 shinyData$Class <- 'MT'
 shinyData[800:1600]$Class <- 'WT'
