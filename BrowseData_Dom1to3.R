@@ -250,7 +250,7 @@ SDs <- shinyData[,lapply(.SD, sd, na.rm=TRUE), .SDcols=getNumericCols(shinyData)
 SDs$net.imagej.ops.Ops.Stats.StdDev_WholeCell_650X705M
 
 # Probability of flipping 57 heads out of 100 flips given a fair (0.5 fraction) coin is
-1-pbinom(4,6,0.30)
+1-pbinom(0.51*15000,15000,0.50)
 qbinom(c(0.025,0.975),100,0.5)
 
 duh <- copy(x1a)
