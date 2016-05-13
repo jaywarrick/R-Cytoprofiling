@@ -38,6 +38,8 @@ WTFileList2 <- c('x0_y4.csv','x0_y5.csv','x0_y6.csv')
 dir3 <- 'G:/Data Tables/Dominique 3'
 MTFileList3 <- c('x0_y3.csv','x0_y4.csv','x0_y5.csv')#,'x1_y6.csv','x1_y7.csv','x1_y8.csv')
 WTFileList3 <- c('x0_y0.csv','x0_y1.csv','x0_y2.csv')#,'x1_y9.csv','x1_y10.csv','x1_y11.csv')
+
+
 ##### DATA PREPROCESSING #####
 
 set.seed(1234)
@@ -90,12 +92,12 @@ x2 <- calculateHuMoments(x2)
 x2 <- calculateZernikeDotProduct(x2)
 
 # Tempororarily make the table wide to calculate averages of Haralick over the different directions
-x2b <- getWideTable(x2)
-x2b <- calculateRMSofHaralick(x2b) 
-x2b <- removeExtraneousColumns(x2b)
+x2 <- getWideTable(x2)
+x2 <- calculateRMSofHaralick(x2) 
+x2 <- removeExtraneousColumns(x2)
 
 # Get our long table back and reorder
-x3 <- getLongTableFromTemplate(x2b, x2)
+x3 <- getLongTableFromTemplate(x2, x1b)
 setorder(x3, Expt, file, Id, Label, MaskChannel, Measurement, ImageChannel)
 
 # Perform robust standardization (x-median)/mad (entertain idea of not applying to histogram bins)
@@ -109,21 +111,21 @@ diffs <- calculateChannelDifferences(x3)
 diffs <- standardizeLongData(diffs)
 
 # Merge it with the original dataset, merging MaskChannel and ImageChannel into MeasurementName
-x4 <- rbindlist(list(x3,diffs), use.names = TRUE)
-x4$Measurement <- paste(x4$Measurement, x4$MaskChannel, x4$ImageChannel, sep='_')
-x4[,MaskChannel:=NULL]
-x4[,ImageChannel:=NULL]
+x3 <- rbindlist(list(x3,diffs), use.names = TRUE)
+x3$Measurement <- paste(x3$Measurement, x3$MaskChannel, x3$ImageChannel, sep='_')
+x3[,MaskChannel:=NULL]
+x3[,ImageChannel:=NULL]
 
 # Get a wide table for machine learning and plotting
-x5 <- getWideTable(x4)
+x3 <- getWideTable(x3)
 
 # Fix naming issues introduced by merging MaskChannel and ImageChannel names with Measurement name
-x5 <- fixColNames(x5)
+x3 <- fixColNames(x3)
 
 # Perform final sorting of columns of data for easier perusing
-x5 <- sortColsByName(x5)
+x3 <- sortColsByName(x3)
 # shinyData[,lapply(.SD, function(x){if(is.factor(x)){return(as.factor(x))}else{return(x)}})]
-shinyData <- copy(x5)
+shinyData <- copy(x3)
 
 getNumericCols(shinyData)[as.logical(as.vector(shinyData[,lapply(.SD, function(x){length(which(!is.finite(x)))>0}),.SDcols=getNumericCols(shinyData)]))]
 
@@ -189,9 +191,23 @@ for(feature in rfImp$name[1:100])
 	dev.off()
 	i <- i + 1
 }
-plotHist(x5,'ZernikeDot40_THISwSEC_WholeCell_390X440_dot_648X684')
-plotHist(x5,'ZernikeDot20_THISwSEC_WholeCell_390X440_dot_648X684')
-plotHist(x5,'Geometric.SizeIterable_')
+plotHist(x3,'ZernikeDot40_THISwSEC_WholeCell_390X440_dot_648X684')
+plotHist(x3,'ZernikeDot20_THISwSEC_WholeCell_390X440_dot_648X684')
+plotHist(x3,'Geometric.SizeIterable_WholeCell_None')
+plotHist(x3,'Geometric.SizeIterable_Nuc_None')
+plotHist(x3,'Stats.Sum_Nuc_390X440')
+plotHist(x3,'Stats.Sum_WholeCell_390X440')
+plotHist(x3,'NCR_Sum')
+plotHist(x3,'NCR_Mean')
+
+# Plot N/C
+x1b[MaskChannel=='Nuc' & ImageChannel=='648 X 684' & Measurement=='Stats.Sum']/x1b[MaskChannel=='Cyt' & ImageChannel=='648 X 684' & Measurement=='Stats.Sum']
+x3[,NCR_Sum:=Stats.Sum_Nuc_648X684/Stats.Sum_Cyt_648X684,by='Class']
+x3[,NCR_Mean:=Stats.Mean_Nuc_648X684/Stats.Mean_Cyt_648X684,by='Class']
+
+x2[MaskChannel=='Nuc',mean(Geometric.SizeIterable, na.rm=T),by='Class']
+x2[MaskChannel=='WholeCell',mean(Geometric.SizeIterable, na.rm=T),by='Class']
+x3[,mean(Stats.Sum_Nuc_390X440, na.rm=T),by='Class']
 
 
 ##### DEBUGGING & TESTS #####
