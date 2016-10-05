@@ -66,52 +66,97 @@ refactor <- function(x)
 
 ##### Table IO #####
 
-getTableList <- function(dir, fileList, class, expt, sampleSize=NULL)
+getTableList <- function(dir, fileList, isArff=F, storeFilePath=F, class=NULL, assignClass=T, expt=NULL, repl=NULL, sampleSize=NULL, colsToRemove = c(), cIdCols = c())
 {
 	if(!is.null(sampleSize))
 	{
 		subSampleSize <- sampleSize / length(fileList)
 	}
 	tableList <- list()
+	
+	# For each file in the fileList
 	for(f in fileList)
 	{
+		# Read the file in
 		print(paste0('Reading file: ', file.path(dir, f)))
-		temp <- fread(file.path(dir, f))
-		temp$Class <- class
-		temp$Expt <- expt
-		if('Z' %in% names(temp))
+		
+		if(isArff)
 		{
-			temp[,Z:=NULL]
+			library(foreign)
+			temp <- data.table(read.arff(file.path(dir, f)))
 		}
-		if('A' %in% names(temp))
+		else
 		{
-			temp[,A:=NULL]
+			temp <- fread(file.path(dir, f))
 		}
-		if('B' %in% names(temp))
+		
+		# Store the filepath that was imported if desired
+		if(storeFilePath)
 		{
-			temp[,B:=NULL]
+			temp$File <- f	
 		}
-		if(!('ImRow' %in% names(temp)))
+		
+		# Store the name/number of the experiment/replicate associated with this file
+		if(!is.null(expt))
 		{
-			temp$ImRow <- 1
+			temp$Expt <- expt
 		}
-		if(!('ImCol' %in% names(temp)))
+		if(!is.null(replicate))
 		{
-			temp$ImCol <- 1
+			temp$Repl <- repl
 		}
-		if(!('Loc' %in% names(temp)))
+		
+		# Create/Assign a 'Class' column
+		if(!is.null(class) && assignClass)
 		{
-			temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
+			temp$Class <- class
 		}
-		temp$file <- f
-		temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
-		temp[,ImRow:=NULL]
-		temp[,ImCol:=NULL]
+		else if(!is.null(class) && !assignClass)
+		{
+			setnames(temp,class,'Class')
+			temp$Class <- as.character(temp$Class)
+		}
+		
+		# Create a column with a complex Id that will be completely unique for each sample
+		idColsFound <- cIdCols[cIdCols %in% names(temp)]
+		if(length(idColsFound) != length(cIdCols))
+		{
+			warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
+		}
+		temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
+		
+		print(temp[cId == '118.11.1.HS5'])
+		
+		# put the complex Id first and the class column last
+		setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
+		
+		# Put the 'Class' column as the last column of the table
+		setcolorder(temp, c(names(temp)[names(temp) != 'Class'], 'Class'))
+		
+		# Remove specified columns from the data
+		for(tempCol in colsToRemove)
+		{
+			if(tempCol %in% names(temp))
+			{
+				temp[,c(tempCol) := NULL]
+			}
+			else
+			{
+				warning(paste(tempCol, 'is not a column of the data table so it cannot be removed'))
+			}
+		}
+		
+		# Grab the randomly sampled rows of the file
 		if(!is.null(sampleSize))
 		{
 			rIds <- trySample(unique(temp$cId), subSampleSize)
 			temp <- temp[cId %in% rIds]
 		}
+		
+		# Print the column names for a little feedback
+		print(names(temp))
+		
+		# Append this table to the list of tables provided.
 		tableList <- append(tableList, list(temp))
 	}
 	return(tableList)
@@ -181,14 +226,18 @@ getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName=
 
 ##### Wide Table Operations #####
 
-removeExtraneousColumns <- function(x)
+removeColsContainingAny <- function(x, colNames)
 {
-	dumbCols <- c(getColNamesContaining(x, 'Phase'), getColNamesContaining(x, 'ImageMoments.Moment'), getColNamesContaining(x, 'ImageMoments.HuMoment'), getColNamesContaining(x, 'ImageMoments.NormalizedCentralMoment'))#, getColNamesContaining(x, 'ImageMoments.CentralMoment'))
+	dumbCols <- c()
+	for(dumbCol in colNames)
+	{
+		dumbCols <- c(dumbCols, getColNamesContaining(x, dumbCol))
+	}
 	dumbCols <- unique(dumbCols)
 	print('Removing the following extraneous columns of information...')
-	for(colName in dumbCols)
+	for(dumbCol in dumbCols)
 	{
-		print(colName)
+		print(dumbCol)
 	}
 	x[,(dumbCols):=NULL]
 	return(x)
@@ -221,7 +270,7 @@ getColNamesContaining <- function(x, name)
 	return(names(x)[grepl(name,names(x))])
 }
 
-removeColNamesContaining <- function(x, name)
+removeColsContaining <- function(x, name)
 {
 	colsToRemove <- getColNamesContaining(x,name)
 	print(paste0("Removing colums with names containing '", name, "'"))
@@ -252,9 +301,12 @@ removeColsContainingNames <- function(x, namesToMatch)
 
 fixColNames <- function(x)
 {
-	replaceStringInColNames(x, ' ', '')
-	replaceStringInColNames(x, '\\$', '.')
-	replaceStringInColNames(x, ':', '_')
+	replaceStringInColNames(x,'_Order_','')
+	replaceStringInColNames(x,'_Rep_','')
+	replaceStringInColNames(x,'$','.')
+	replaceStringInColNames(x,'net.imagej.ops.Ops.','')
+	replaceStringInColNames(x,' ','')
+	replaceStringInColNames(x,':','_')
 }
 
 getAllColNamesExcept <- function(x, names)
@@ -275,7 +327,7 @@ getNonNumericCols <- function(x)
 replaceStringInColNames <- function(x, old, new)
 {
 	oldNames <- names(x)
-	newNames <- gsub(old, new, names(x))
+	newNames <- gsub(old, new, names(x), fixed=T)
 	setnames(x, oldNames, newNames)
 }
 
@@ -324,6 +376,43 @@ getNoVarianceCols <- function(x)
 	return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
 }
 
+removeIncompleteRows <- function(x)
+{
+	valid <- NULL
+	for(colName in names(x))
+	{
+		#print(colName)
+		if(is.numeric(x[, colName, with=F][[1]][1]))
+		{
+			temp <- is.finite(x[,colName,with=F][[1]])
+			if(is.null(valid))
+			{
+				valid <- temp
+			}
+			else
+			{
+				valid <- valid & temp
+			}
+		}
+	}
+	cat('Removing rows... ', which(!valid), sep=',')
+	return(x[valid])
+}
+
+calculateLogRatiosOfColsContainingName <- function(x, name)
+{
+	mNames <- getColNamesContaining(x, name)
+	combos <- combn(mNames,2)
+	for(j in seq_along(combos[1,]))
+	{
+		combo <- combos[,j]
+		ending1 <- substring(combo[1], first=nchar(name) + 2)
+		ending2 <- substring(combo[2], first=nchar(name) + 2)
+		x[,c(paste0(name, "LR.", ending1, ".", ending2)) := log(get(combo[1]) / get(combo[2]))]
+	}
+	return(x)
+}
+
 ##### Long Table Operations #####
 
 divideMAbyMBbyRef <- function(x, mA, mB)
@@ -344,22 +433,36 @@ divideMAbyMBbyRef <- function(x, mA, mB)
 	return(x)
 }
 
-intIntensityNormalizeCentralMoments <- function(x)
+integratedIntensityNormalizeCentralMoments <- function(x)
 {
-	mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
+	# mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
+	# for(mName in mNames)
+	# {
+	# 	x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
+	# }
+	# return(x)
+	mNames <- getColNamesContaining(x, 'ImageMoments.CentralMoment')
+	newMNames <- paste(mNames, '.M00Normalized', sep='')
 	for(mName in mNames)
 	{
-		x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
+		x[,c(mName) := get(mName)/Stats.Sum]
 	}
+	setnames(x, mNames, newMNames)
 	return(x)
 }
 
 meanNormalizeZernikeMoments <- function(x)
 {
-	mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
+	# mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
+	# for(mName in mNames)
+	# {
+	# 	x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean')
+	# }
+	# return(x)
+	mNames <- getColNamesContaining(x, 'ZernikeMag')
 	for(mName in mNames)
 	{
-		x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean')
+		x[,c(mName) := get(mName)/Stats.Mean]
 	}
 	return(x)
 }
@@ -383,16 +486,6 @@ getMeasurementNamesContaining <- function(x, name)
 {
 	ms <- unique(x$Measurement)
 	return(ms[grepl(name,ms)])
-}
-
-getMomentTable <- function(x, baseName='ImageMoments.CentralMoment')
-{
-	theNames <- unique(x[['Measurement']])
-	theNames <- theNames[grepl(baseName,theNames, fixed=TRUE)]
-	start <- nchar(baseName)
-	orders <- substr(theNames, start+1, start+2)
-	ret <- data.frame(Measurement=theNames, orderx=as.numeric(substr(orders,1,1)), ordery=as.numeric(substr(orders,2,2)))
-	return(ret)
 }
 
 removeMeasurementNamesContaining <- function(x, name)
