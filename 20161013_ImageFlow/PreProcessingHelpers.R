@@ -1,6 +1,17 @@
 library(data.table)
 library(foreign)
 
+##### GitHub Tools #####
+
+sourceGitHubFile <- function(user, repo, branch, file)
+{
+	require(curl)
+	destfile <- tempfile()
+	fileToGet <- paste0("https://raw.githubusercontent.com/", user, "/", repo, "/", branch, "/", file)
+	curl_download(url=fileToGet, destfile)
+	source(destfile)
+}
+
 ##### Visualization #####
 
 browseShinyData <- function()
@@ -65,6 +76,113 @@ refactor <- function(x)
 }
 
 ##### Table IO #####
+
+getTableListFromDB <- function(db, ds, x, y, objectName, isArff=F, storeFilePath=F, class=NULL, assignClass=T, expt=NULL, repl=NULL, sampleSize=NULL, colsToRemove = c(), cIdCols = c(), fsep='\\\\')
+{
+	tableList <- list()
+	
+	jData <- getData(db=db, ds=ds, x=x, y=y, type='File', name=objectName)
+	fileList <- jData$fileList
+	
+	if(!is.null(sampleSize))
+	{
+		subSampleSize <- sampleSize / length(fileList)
+	}
+	
+	# For each file in the fileList
+	for(f in fileList)
+	{
+		# Read the file in
+		print(paste0('Reading file: ', f))
+		
+		if(isArff)
+		{
+			library(foreign)
+			temp <- data.table(read.arff(f))
+		}
+		else
+		{
+			temp <- fread(f)
+		}
+		
+		# Store the filepath that was imported if desired
+		if(storeFilePath)
+		{
+			temp$File <- f	
+		}
+		
+		# Store the name/number of the experiment/replicate associated with this file
+		if(!is.null(expt))
+		{
+			temp$Expt <- expt
+		}
+		if(!is.null(replicate))
+		{
+			temp$Repl <- repl
+		}
+		
+		# Create/Assign a 'Class' column
+		if(!is.null(class) && assignClass)
+		{
+			temp$Class <- class
+		}
+		else if(!is.null(class) && !assignClass)
+		{
+			setnames(temp,class,'Class')
+			temp$Class <- as.character(temp$Class)
+		}
+		
+		# Create a column with a complex Id that will be completely unique for each sample
+		idColsFound <- cIdCols[cIdCols %in% names(temp)]
+		cat(names(temp))
+		if(length(idColsFound) == 0)
+		{
+			cat(names(temp))
+			stop('Must specify cIds for this function to enable sampling.')
+		}
+		if(length(idColsFound) != length(cIdCols))
+		{
+			warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
+		}
+		temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
+		
+		# put the complex Id first and the class column last
+		setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
+		
+		# Put the 'Class' column as the last column of the table
+		if('Class' %in% names(temp))
+		{
+			setcolorder(temp, c(names(temp)[names(temp) != 'Class'], 'Class'))
+		}
+		
+		# Remove specified columns from the data
+		for(tempCol in colsToRemove)
+		{
+			if(tempCol %in% names(temp))
+			{
+				temp[,c(tempCol) := NULL]
+			}
+			else
+			{
+				warning(paste(tempCol, 'is not a column of the data table so it cannot be removed'))
+			}
+		}
+		
+		# Grab the randomly sampled rows of the file
+		if(!is.null(sampleSize))
+		{
+			rIds <- trySample(unique(temp$cId), subSampleSize)
+			temp <- temp[cId %in% rIds]
+		}
+		
+		# Print the column names for a little feedback
+		print(names(temp))
+		
+		# Append this table to the list of tables provided.
+		tableList <- append(tableList, list(temp))
+	}
+	return(tableList)
+}
 
 getTableList <- function(dir, fileList, isArff=F, storeFilePath=F, class=NULL, assignClass=T, expt=NULL, repl=NULL, sampleSize=NULL, colsToRemove = c(), cIdCols = c())
 {
@@ -267,7 +385,7 @@ removeColsWithInfiniteVals <- function(x)
 
 getColNamesContaining <- function(x, name)
 {
-	return(names(x)[grepl(name,names(x))])
+	return(names(x)[grepl(name,names(x), fixed=T)])
 }
 
 removeColsContaining <- function(x, name)
@@ -306,7 +424,8 @@ fixColNames <- function(x)
 	replaceStringInColNames(x,'$','.')
 	replaceStringInColNames(x,'net.imagej.ops.Ops.','')
 	replaceStringInColNames(x,' ','')
-	replaceStringInColNames(x,':','_')
+	replaceStringInColNames(x,':','.')
+	replaceStringInColNames(x,'_','.')
 }
 
 getAllColNamesExcept <- function(x, names)
@@ -371,32 +490,41 @@ removeNoVarianceCols <- function(x)
 
 getNoVarianceCols <- function(x)
 {
-	tempSD <- function(y){sd(y, na.rm = TRUE)}
+	tempSD <- function(y){mad(y, na.rm = TRUE)}
 	tempNames <- x[,lapply(.SD, tempSD), .SDcols=getNumericCols(x)]
 	return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
 }
 
+getNonFiniteSummary <- function(x)
+{
+	getNonFiniteRowsLength <- function(x)
+	{
+		return(length(which(!(is.character(x) | is.finite(x)))))
+	}
+	temp <- lapply(x, getNonFiniteRowsLength)
+	temp <- data.table(Measurement=names(x), Length=as.numeric(as.vector(temp)))
+	temp <- temp[order(Length, decreasing = T)]
+	return(temp)
+}
+
+getNonFiniteRows <- function(x)
+{
+	getNonFiniteRows <- function(x)
+	{
+		return(which(!(is.character(x) | is.finite(x))))
+	}
+	temp <- lapply(x, getNonFiniteRows)
+	temp <- unique(do.call(c, temp))
+	temp <- temp[order(temp)]
+	return(temp)
+}
+
 removeIncompleteRows <- function(x)
 {
-	valid <- NULL
-	for(colName in names(x))
-	{
-		#print(colName)
-		if(is.numeric(x[, colName, with=F][[1]][1]))
-		{
-			temp <- is.finite(x[,colName,with=F][[1]])
-			if(is.null(valid))
-			{
-				valid <- temp
-			}
-			else
-			{
-				valid <- valid & temp
-			}
-		}
-	}
-	cat('Removing rows... ', which(!valid), sep=',')
-	return(x[valid])
+	nonFiniteRows <- getNonFiniteRows(x)
+	cat('Removing rows... ', nonFiniteRows, sep=',')
+	x <- x[-nonFiniteRows]
+	return(x)
 }
 
 calculateLogRatiosOfColsContainingName <- function(x, name)
@@ -408,12 +536,23 @@ calculateLogRatiosOfColsContainingName <- function(x, name)
 		combo <- combos[,j]
 		ending1 <- substring(combo[1], first=nchar(name) + 2)
 		ending2 <- substring(combo[2], first=nchar(name) + 2)
-		x[,c(paste0(name, "LR.", ending1, ".", ending2)) := log(get(combo[1]) / get(combo[2]))]
+		x[,c(paste0(name, "LR_", ending1, "_", ending2)) := log(get(combo[1]) / get(combo[2]))]
 	}
 	return(x)
 }
 
 ##### Long Table Operations #####
+
+removeExtraneousMaximaFromFlowImages <- function(x, maskChannel='WholeCell', measurement='net.imagej.ops.Ops$Geometric$SizeIterable', cId='cId', cId2='cId2')
+{
+	suspectcIds <- unique(x[Id == 1]$cId)
+	temp <- x[cId %in% suspectcIds & MaskChannel==c(maskChannel) & Measurement==c(measurement)]
+	temp[,rank:=rank(-Value, ties.method = 'first'), by=.(cId,MaskChannel,ImageChannel)][]
+	cId2sToRemove <- unique(temp[rank != 1]$cId2)
+	cat('Removing Cells with duplicate maxima:', cId2sToRemove, sep="\n")
+	x <- x[!(cId2 %in% cId2sToRemove)]
+	return(x)
+}
 
 divideMAbyMBbyRef <- function(x, mA, mB)
 {
