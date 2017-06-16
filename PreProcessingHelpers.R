@@ -275,7 +275,7 @@ getNonNumericCols <- function(x)
 replaceStringInColNames <- function(x, old, new)
 {
 	oldNames <- names(x)
-	newNames <- gsub(old, new, names(x))
+	newNames <- gsub(old, new, names(x), fixed=T)
 	setnames(x, oldNames, newNames)
 }
 
