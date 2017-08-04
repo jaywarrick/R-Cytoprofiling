@@ -1,27 +1,6 @@
 library(data.table)
 library(foreign)
 
-##### Data Specific Functions #####
-
-getConditionTable <- function(Dir='/Users/jaywarrick/Downloads/Files For Jay')
-{
-	prefix1 <- 'Coloc CSV Table - '
-	prefix2 <- 'Feature CSV Table - '
-	extension <- '.csv'
-	ret <- data.table(x=0:5, y=rep(0:3, each=6))
-	ret$Dir <- Dir
-	ret[, CellType:={if(x <=2){'WT'}else{'MT'}}, by=x]
-	ret[, Stim:={if(y <=1){'TRUE'}else{'FALSE'}}, by=y]
-	ret[, LMB:={if(y == 0 || y == 2){'TRUE'}else{'FALSE'}}, by=.(x, y)]
-	ret[, Stain:='p65']
-	ret[, Stain:={if(x == 1 || x == 4){'cRel'}else{Stain}}, by=.(x)]
-	ret[, Stain:={if(x == 2 || x == 5){'IkBa'}else{Stain}}, by=.(x)]
-	ret[, ColocFile:=paste0(prefix1,'x',x,'_','y',y,extension)]
-	ret[, FeatureFile:=paste0(prefix2,'x',x,'_','y',y,extension)]
-	return(ret)
-}
-
-
 ##### Visualization #####
 
 browseShinyData <- function()
@@ -60,9 +39,16 @@ resample <- function(x, ...)
 	x[sample.int(length(x), ...)]
 }
 
-getLocsFromRCs <- function(r, c, numRows)
+getLocsFromRCs <- function(r, c, numRows, zeroIndexing=true)
 {
-	r + max(numRows) * c
+	if(zeroIndexing)
+	{
+		r + max(numRows) * c
+	}
+	else
+	{
+		(r-1) + max(numRows) * (c-1)
+	}
 }
 
 sind <- function(x)
@@ -87,7 +73,7 @@ refactor <- function(x)
 
 ##### Table IO #####
 
-getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cIds=NULL)
+getTableList <- function(dir1, fileList, class, expt, sampleSize=NULL, cIds=NULL)
 {
 	if(!is.null(sampleSize))
 	{
@@ -96,7 +82,7 @@ getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cIds=NULL)
 	tableList <- list()
 	for(f in fileList)
 	{
-		path <- file.path(dir, f)
+		path <- file.path(dir1, f)
 		print(paste0('Reading file: ', path))
 		temp <- fread(input=path)
 		temp$Class <- class
@@ -182,6 +168,19 @@ getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName=
 
 ##### Wide Table Operations #####
 
+applySimilarityTransform <- function(x, measurements='Stats.PearsonsCorrelationCoefficient', bounds=c(-1,1), removeOld=TRUE)
+{
+	for(measure in measurements)
+	{
+		x[, c(paste0(measure, '.Dilate')) := log((abs(bounds[1]) + get(measure))/(abs(bounds[2]) - get(measure)))]
+		if(removeOld)
+		{
+
+			x[, c(measure):=NULL]
+		}
+	}
+}
+
 summarizeGeometry <- function(x, idCols)
 {
 	x[, MaskChannel2 := tstrsplit(MaskChannel, '.p', fixed=T, keep=1L)]
@@ -237,6 +236,21 @@ summarizeGeometry <- function(x, idCols)
 	x[is.finite(Geometric.X), c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'MaskChannel2')]
 	x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
 	return(x)
+}
+
+labeledBoxPlot <- function(data, labelCols=c('name'), ord=c(1), valueCol='MeanDecreaseAccuracy', col=c('blue'), bottom=10, left=4, top=1, right=1, num.offset=1, axlab.offset=5, ...)
+{
+	library(data.table)
+	myFormula <- reformulate(termlabels=labelCols, response=valueCol)
+
+	setorderv(rfImp, labelCols, ord)
+	labels <- unique(data[[labelCols[length(labelCols)]]])
+	at <- (1:length(labels))
+
+	print(labels)
+	par(mar=c(bottom,left,top,right), mgp=c(axlab.offset,num.offset,0))
+	duh <- boxplot(myFormula, data=data, las=2, mar=c(6,6,6,6), col=col, xaxt='n', ...)
+	axis(1, labels = labels, at=at, las=2)
 }
 
 # getSubRegionSizeWeightedMeans2 <- function(x, weights, features, featureResultNames=features, idCols=getAllColNamesExcept(x, c('MaskChannel','Value')))
@@ -688,7 +702,7 @@ removeNoVarCombos <- function(x, val='Value', by=c('MaskChannel','ImageChannel',
 
 	# If any of the experiments saw 0 variance (see how unique call does not include 'Expt'), then we should eliminate that measure (combo of Measurement, ImageChannel, and MaskChannel) from all experiments
 	toRemove <- unique(x[VAR == 0,c('Measurement','ImageChannel','MaskChannel')])
-	toRemove[, combo:=paste(Measurement,ImageChannel,MaskChannel,sep=' ')]
+	toRemove[, combo:=paste(Measurement,MaskChannel,ImageChannel,sep=' ')]
 
 	if(nrow(toRemove)>0)
 	{
@@ -697,7 +711,7 @@ removeNoVarCombos <- function(x, val='Value', by=c('MaskChannel','ImageChannel',
 		options(max.print=nrow(toRemove) + 10)
 		print(toRemove$combo, nrows=nrow(toRemove))
 		options(max.print=maxOption)
-		y <- x[!(paste(Measurement,ImageChannel,MaskChannel,sep=' ') %in% toRemove$combo)]
+		y <- x[!(paste(Measurement,MaskChannel,ImageChannel,sep=' ') %in% toRemove$combo)]
 		x[, VAR:=NULL]
 		y[, VAR:=NULL]
 		return(y)

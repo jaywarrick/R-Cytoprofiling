@@ -218,7 +218,7 @@ removeColsWithInfiniteVals <- function(x)
 
 getColNamesContaining <- function(x, name)
 {
-	return(names(x)[grepl(name,names(x))])
+     return(names(x)[grepl(name,names(x))])
 }
 
 removeColNamesContaining <- function(x, name)
@@ -264,7 +264,21 @@ getAllColNamesExcept <- function(x, names)
 
 getNumericCols <- function(x)
 {
-	return(names(x)[unlist(x[,lapply(.SD, is.numeric)])])
+     return(names(x)[unlist(x[,lapply(.SD, is.numeric)])])
+}
+
+getNumericColsOfInterest <- function(x, data.cols=NULL, data.cols.contains=NULL)
+{
+     ret <- getNumericCols(x)
+     if(!is.null(data.cols))
+     {
+          ret <- intersect(data.cols, ret)
+     }
+     else if(is.null(data.cols) & !is.null(data.cols.contains))
+     {
+          ret <- intersect(getColNamesContaining(x, data.cols.contains), ret)
+     }
+     return(ret)
 }
 
 getNonNumericCols <- function(x)
@@ -292,36 +306,102 @@ sortColsByName <- function(x)
 	setcolorder(x, sort(names(x)))
 }
 
-standardizeWideData <- function(x)
+standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, data.cols=NULL, data.cols.contains=NULL, by=NULL)
 {
-	removeNoVarianceCols(x)
-	robustScale <- function(x)
-	{
-		m <- median(x, na.rm=TRUE)
-		return((x-m)/mad(x, center=m, na.rm=TRUE))
-	}
-	x[,lapply(.SD, function(x){if(is.numeric(x)){return(robustScale(x))}else{return(x)}})]
+     # x <- data.table(a=1.1:3.1, b=4.1:6.1, c=c(100.1,110.1,120.1)); duh <- copy(x); duh2 <- as.data.table(lapply(x, log))
+     # data.cols <- c('b','c')
+     # row.normalize=F
+     # row.use.median=F
+     # col.use.median=F
+     # col.use.mad=F
+     # data.cols.contains = NULL
+     # by=NULL
+
+     # Get the names of the columns of interest
+     cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
+
+     # Remove cols with now variance
+     removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols)
+
+     # Redefine cols just in case
+     cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
+
+     if(row.normalize)
+     {
+          # Take each row and divide it by the row mean/median (i.e., row normalize)
+          x[, rowNum:=as.double(1:nrow(x))] # create a rowNum column to do operations by row
+          if(row.use.median)
+          {
+               x[, c(cols) := lapply(.SD, "-", median(unlist(.SD))), .SDcols=cols, by=.(rowNum)]
+          }else
+          {
+               x[, c(cols) := lapply(.SD, "-", mean(unlist(.SD))), .SDcols=cols, by=.(rowNum)]
+          }
+          x[, rowNum:=NULL] # Remove the rowNum column
+     }
+
+     # Now perform regular column standardization (grouping as appropriate using 'by')
+     robustScale <- function(x, use.median, use.mad)
+     {
+          if(use.median)
+          {
+               m <- median(x, na.rm=TRUE)
+          }
+          else
+          {
+               m <- mean(x, na.rm=TRUE)
+          }
+
+          if(use.mad)
+          {
+               sig <- mad(x, center=m, na.rm=TRUE)
+          }
+          else
+          {
+               sig <- sd(x, na.rm=TRUE)
+          }
+
+          return((x-m)/sig)
+     }
+
+     x[,c(cols):=lapply(.SD, robustScale, use.median=col.use.median, use.mad=col.use.mad), .SDcols=cols, by=by]
+     return(x)
 }
 
-removeNoVarianceCols <- function(x)
+removeNoVarianceCols <- function(x, use.mad=F, cols=NULL)
 {
-	namesToRemove <- getNoVarianceCols(x)
-	if(length(namesToRemove) > 0)
-	{
-		print("Removing cols with a variance of zero...")
-		for(name in namesToRemove)
-		{
-			print(name)
-			x[,(name):=NULL]
-		}
-	}
+     namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols)
+     if(length(namesToRemove) > 0)
+     {
+          if(use.mad)
+          {
+               print("Removing cols with a MAD of zero...")
+          }
+          else
+          {
+               print("Removing cols with a variance of zero...")
+          }
+          for(name in namesToRemove)
+          {
+               print(name)
+               x[,(name):=NULL]
+          }
+     }
 }
 
-getNoVarianceCols <- function(x)
+getNoVarianceCols <- function(x, use.mad, cols=NULL)
 {
-	tempSD <- function(y){sd(y, na.rm = TRUE)}
-	tempNames <- x[,lapply(.SD, tempSD), .SDcols=getNumericCols(x)]
-	return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
+     cols <- getNumericColsOfInterest(x, data.cols=cols)
+     if(use.mad)
+     {
+          tempSD <- function(y){mad(y, na.rm = TRUE)}
+     }
+     else
+     {
+          tempSD <- function(y){sd(y, na.rm = TRUE)}
+     }
+     tempNames <- x[,lapply(.SD, tempSD), .SDcols=cols]
+     return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
 }
 
 ##### Long Table Operations #####
