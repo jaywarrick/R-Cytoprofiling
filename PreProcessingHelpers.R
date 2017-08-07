@@ -66,7 +66,7 @@ refactor <- function(x)
 
 ##### Table IO #####
 
-getTableList <- function(dir, fileList, class, expt, sampleSize=NULL)
+getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cellIds=NULL)
 {
 	if(!is.null(sampleSize))
 	{
@@ -107,6 +107,11 @@ getTableList <- function(dir, fileList, class, expt, sampleSize=NULL)
 		temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
 		temp[,ImRow:=NULL]
 		temp[,ImCol:=NULL]
+		if(!is.null(cellIds))
+		{
+		     rIds <- cellIds
+		     temp <- temp[cId %in% rIds]
+		}
 		if(!is.null(sampleSize))
 		{
 			rIds <- trySample(unique(temp$cId), subSampleSize)
