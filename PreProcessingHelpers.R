@@ -692,13 +692,6 @@ calculateRMSofHaralick <- function(x, removeOriginalHaralickMeasures=FALSE)
 	return(data.table(x))
 }
 
-getColors <- function(pointClasses)
-{
-	ret <- rep('rgb(0,0,1,0.2)', length(pointClasses))
-	ret[pointClasses == 'MT'] <- 'rgb(1,0,0,0.2)'
-	return(ret)
-}
-
 ##### Testing #####
 
 # testFunc2 <- function(x, measurement)
