@@ -10,28 +10,6 @@ browseShinyData <- function()
 	shinyApp(ui=myUI, server=myServer)
 }
 
-plotHist <- function(x, feature)
-{
-	breaks=c(-1000, seq(-4,4,0.5), 1000)
-	wt <- x[Class == 'WT'][[feature]]
-	mt <- x[Class == 'MT'][[feature]]
-	cmt <- rgb(0,0,1,0.8)
-	cwt <- rgb(1,0,0,0.8)
-	wtd <- density(wt, from=-4, to=4)
-	mtd <- density(mt, from=-4, to=4)
-	if(max(wtd$y) > max(mtd$y))
-	{
-		plot(wtd, col='red', xlim=c(-4,4), main='', xlab=feature)
-		lines(mtd, col='blue')
-	}
-	else
-	{
-		plot(mtd, col='blue', xlim=c(-4,4), main='', xlab=feature)
-		lines(wtd, col='red')
-	}
-	legend('topright', legend=c('MT','WT'), col=c('blue','red'), lty=1)
-}
-
 ##### General #####
 
 resample <- function(x, ...)
@@ -206,24 +184,31 @@ divideColAByColB <- function(x, colA, colB)
 	return(x)
 }
 
-removeColsWithInfiniteVals <- function(x)
+removeColsWithNonFiniteVals <- function(x, cols=NULL)
 {
-	duh <- x[,lapply(.SD, function(y){length(which(!is.finite(y))) > 0}), .SDcols=getNumericCols(x)]
-	duh2 <- getNumericCols(x)[as.logical(as.vector(duh))]
-	if(length(duh2 > 0))
-	{
-		print("Removing cols with infinite values...")
-	}
-	for(col in duh2)
-	{
-		print(col)
-		x[,(col):=NULL]
-	}
+	# Remove rows and columns of data contining non-finite data (typically inverses etc.)
+	temp.names <- copy(names(x))
+	lapply.data.table(x, FUN=function(n){if(any(!is.finite(n))){return(NULL)}else{return(n)}}, cols=Measurements, in.place=T)
+	print('Removed the following columns of non-finite data.')
+	temp.names <- temp.names[!(temp.names %in% names(x))]
+	print(temp.names)
+
+	# duh <- x[,lapply(.SD, function(y){length(which(!is.finite(y))) > 0}), .SDcols=getNumericCols(x)]
+	# duh2 <- getNumericCols(x)[as.logical(as.vector(duh))]
+	# if(length(duh2 > 0))
+	# {
+	# 	print("Removing cols with infinite values...")
+	# }
+	# for(col in duh2)
+	# {
+	# 	print(col)
+	# 	x[,(col):=NULL]
+	# }
 }
 
 getColNamesContaining <- function(x, name)
 {
-     return(names(x)[grepl(name,names(x))])
+     return(names(x)[grepl(name,names(x),fixed=TRUE)])
 }
 
 removeColNamesContaining <- function(x, name)
