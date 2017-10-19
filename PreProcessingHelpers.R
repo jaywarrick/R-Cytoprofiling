@@ -100,6 +100,62 @@ getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cellIds=NU
 	return(tableList)
 }
 
+getTableList <- function(dir, featureTable, colocTable, class, expt, sampleSize=NULL, cellIds=NULL)
+{
+     if(!is.null(sampleSize))
+     {
+          subSampleSize <- sampleSize / length(fileList)
+     }
+     tableList <- list()
+     for(f in fileList)
+     {
+          print(paste0('Reading file: ', file.path(dir, f)))
+          temp <- fread(file.path(dir, f))
+          temp$Class <- class
+          temp$Expt <- expt
+          if('Z' %in% names(temp))
+          {
+               temp[,Z:=NULL]
+          }
+          if('A' %in% names(temp))
+          {
+               temp[,A:=NULL]
+          }
+          if('B' %in% names(temp))
+          {
+               temp[,B:=NULL]
+          }
+          if(!('ImRow' %in% names(temp)))
+          {
+               temp$ImRow <- 1
+          }
+          if(!('ImCol' %in% names(temp)))
+          {
+               temp$ImCol <- 1
+          }
+          if(!('Loc' %in% names(temp)))
+          {
+               temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
+          }
+          temp$file <- f
+          temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
+          temp[,ImRow:=NULL]
+          temp[,ImCol:=NULL]
+          if(!is.null(cellIds))
+          {
+               rIds <- cellIds
+               temp <- temp[cId %in% rIds]
+          }
+          if(!is.null(sampleSize))
+          {
+               rIds <- trySample(unique(temp$cId), subSampleSize)
+               temp <- temp[cId %in% rIds]
+          }
+          tableList <- append(tableList, list(temp))
+     }
+     return(tableList)
+}
+
 getXYCSVsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
 {
 	ret <- list()
@@ -475,6 +531,17 @@ removeMeasurementNamesContaining <- function(x, name)
 	}
 	x <- x[!(Measurement %in% namesToRemove)]
 	return(x)
+}
+
+removeMeasurementNames <- function(x, names)
+{
+     print("Removing the following Measurements...")
+     for(name in names)
+     {
+          print(name)
+     }
+     x <- x[!(Measurement %in% names)]
+     return(x)
 }
 
 standardizeLongData <- function(x, by=c('MaskChannel','ImageChannel','Measurement','Expt'))
