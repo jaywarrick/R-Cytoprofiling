@@ -1,5 +1,18 @@
 library(data.table)
 library(foreign)
+library(spatstat)
+library(shotGroups)
+
+##### GitHub Tools #####
+
+sourceGitHubFile <- function(user, repo, branch, file)
+{
+     require(curl)
+     destfile <- tempfile()
+     fileToGet <- paste0("https://raw.githubusercontent.com/", user, "/", repo, "/", branch, "/", file)
+     curl_download(url=fileToGet, destfile)
+     source(destfile)
+}
 
 ##### Visualization #####
 
@@ -43,6 +56,113 @@ refactor <- function(x)
 }
 
 ##### Table IO #####
+
+getTableListFromDB <- function(db, ds, x, y, objectName, isArff=F, storeFilePath=F, class=NULL, assignClass=T, expt=NULL, repl=NULL, sampleSize=NULL, colsToRemove = c(), cIdCols = c(), fsep='\\\\')
+{
+     tableList <- list()
+     
+     jData <- getData(db=db, ds=ds, x=x, y=y, type='File', name=objectName)
+     fileList <- jData$fileList
+     
+     if(!is.null(sampleSize))
+     {
+          subSampleSize <- sampleSize / length(fileList)
+     }
+     
+     # For each file in the fileList
+     for(f in fileList)
+     {
+          # Read the file in
+          print(paste0('Reading file: ', f))
+          
+          if(isArff)
+          {
+               library(foreign)
+               temp <- data.table(read.arff(f))
+          }
+          else
+          {
+               temp <- fread(f)
+          }
+          
+          # Store the filepath that was imported if desired
+          if(storeFilePath)
+          {
+               temp$File <- f	
+          }
+          
+          # Store the name/number of the experiment/replicate associated with this file
+          if(!is.null(expt))
+          {
+               temp$Expt <- expt
+          }
+          if(!is.null(replicate))
+          {
+               temp$Repl <- repl
+          }
+          
+          # Create/Assign a 'Class' column
+          if(!is.null(class) && assignClass)
+          {
+               temp$Class <- class
+          }
+          else if(!is.null(class) && !assignClass)
+          {
+               setnames(temp,class,'Class')
+               temp$Class <- as.character(temp$Class)
+          }
+          
+          # Create a column with a complex Id that will be completely unique for each sample
+          idColsFound <- cIdCols[cIdCols %in% names(temp)]
+          cat(names(temp))
+          if(length(idColsFound) == 0)
+          {
+               cat(names(temp))
+               stop('Must specify cIds for this function to enable sampling.')
+          }
+          if(length(idColsFound) != length(cIdCols))
+          {
+               warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
+          }
+          temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
+          
+          # put the complex Id first and the class column last
+          setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
+          
+          # Put the 'Class' column as the last column of the table
+          if('Class' %in% names(temp))
+          {
+               setcolorder(temp, c(names(temp)[names(temp) != 'Class'], 'Class'))
+          }
+          
+          # Remove specified columns from the data
+          for(tempCol in colsToRemove)
+          {
+               if(tempCol %in% names(temp))
+               {
+                    temp[,c(tempCol) := NULL]
+               }
+               else
+               {
+                    warning(paste(tempCol, 'is not a column of the data table so it cannot be removed'))
+               }
+          }
+          
+          # Grab the randomly sampled rows of the file
+          if(!is.null(sampleSize))
+          {
+               rIds <- trySample(unique(temp$cId), subSampleSize)
+               temp <- temp[cId %in% rIds]
+          }
+          
+          # Print the column names for a little feedback
+          print(names(temp))
+          
+          # Append this table to the list of tables provided.
+          tableList <- append(tableList, list(temp))
+     }
+     return(tableList)
+}
 
 getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cellIds=NULL)
 {
@@ -220,19 +340,6 @@ getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName=
 
 ##### Wide Table Operations #####
 
-removeExtraneousColumns <- function(x)
-{
-	dumbCols <- c(getColNamesContaining(x, 'Phase'), getColNamesContaining(x, 'ImageMoments.Moment'), getColNamesContaining(x, 'ImageMoments.HuMoment'), getColNamesContaining(x, 'ImageMoments.NormalizedCentralMoment'))#, getColNamesContaining(x, 'ImageMoments.CentralMoment'))
-	dumbCols <- unique(dumbCols)
-	print('Removing the following extraneous columns of information...')
-	for(colName in dumbCols)
-	{
-		print(colName)
-	}
-	x[,(dumbCols):=NULL]
-	return(x)
-}
-
 divideColAByColB <- function(x, colA, colB)
 {
 	x[get(colB)==0,(colA):=NA]
@@ -267,32 +374,50 @@ getColNamesContaining <- function(x, name)
      return(names(x)[grepl(name,names(x),fixed=TRUE)])
 }
 
-removeColNamesContaining <- function(x, name)
+removeCols <- function(x, colsToRemove)
 {
-	colsToRemove <- getColNamesContaining(x,name)
-	print(paste0("Removing colums with names containing '", name, "'"))
-	for(colToRemove in colsToRemove)
-	{
-		print(colToRemove)
-		x[,(colToRemove):=NULL]
-	}
+	
+     colsToRemove <- colsToRemove[colsToRemove %in% names(x)]
+     if(length(colsToRemove) == 0)
+     {
+          print(paste0("Didn't find any columns to remove."))
+     }
+     else
+     {
+          print(paste0("Removing colums"))
+          for(colToRemove in colsToRemove)
+          {
+               print(colToRemove)
+               x[,(colToRemove):=NULL]
+          }
+     }
 	return(x)
 }
 
-removeColsContainingNames <- function(x, namesToMatch)
+removeColsContaining <- function(x, stringsToMatch)
 {
-	colsToRemove <- getColNamesContaining(x, namesToMatch[1])
 	print(paste0("Removing colums with names containing..."))
-	for(nameToMatch in namesToMatch)
+     colsToRemove <- c()
+	for(stringToMatch in stringsToMatch)
 	{
-		print(nameToMatch)
-		colsToRemove <- colsToRemove[colsToRemove %in% getColNamesContaining(x, nameToMatch)]
+		print(stringToMatch)
+		colsToRemove <- c(colsToRemove, getColNamesContaining(x, stringToMatch))
 	}
-	for(colToRemove in unique(colsToRemove))
-	{
-		print(colToRemove)
-		x[,(colToRemove):=NULL]
-	}
+     colsToRemove <- unique(colsToRemove[colsToRemove %in% names(x)])
+     if(length(colsToRemove) == 0)
+     {
+          print(paste0("Didn't find any columns to remove."))
+     }
+     else
+     {
+          print(paste0(""))
+          print(paste0("Removing colums..."))
+          for(colToRemove in colsToRemove)
+          {
+               print(colToRemove)
+               x[,(colToRemove):=NULL]
+          }
+     }
 	return(x)
 }
 
@@ -350,6 +475,67 @@ getWideTable <- function(x)
 sortColsByName <- function(x)
 {
 	setcolorder(x, sort(names(x)))
+}
+
+summarizeGeometry <- function(x, idCols)
+{
+     x[, MaskChannel2 := tstrsplit(MaskChannel, '.p', fixed=T, keep=1L)]
+     x[is.finite(Geometric.SizeIterable), ':='(weights=Geometric.SizeIterable/(sum(Geometric.SizeIterable, na.rm=T)), countWeights=Geometric.SizeIterable/(max(Geometric.SizeIterable, na.rm=T))), by=c(idCols, 'MaskChannel2')]
+     if('Geometric.MaximumFeretsDiameter' %in% names(x))
+     {
+          # Only checked for one just, but really this is to just check to see if we already called this function on the data as the next line deletes these features
+          x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter, Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
+     }
+     removeCols(x, c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter', 'Geometric.MajorAxis', 'Geometric.MinorAxis'))
+     
+     # Decide how to combine different geometric features
+     #geomFeatures <- c('Convexity', 'Solidity', 'SizeIterable', 'BoundarySize', 'MainElongation', 'Circularity',
+     #'Boxivity', 'Eccentricity', 'MajorAxis', 'MaximumFeretsDiameter', 'MinimumFeretsDiameter',
+     #'MinorAxis', 'Roundness', 'X', 'Y')
+     geomFeatures_Total <- c('Geometric.SizeIterable', 'Geometric.BoundarySize')
+     geomFeatures_SizeWeightedMean <- c('Geometric.SizeIterable', 'Geometric.Convexity', 'Geometric.Solidity', 'Geometric.MainElongation', 'Geometric.Circularity', 'Geometric.Boxivity', 'Geometric.Eccentricity', 'Geometric.BoundarySize','Geometric.FeretsAspectRatio','Geometric.EllipseAspectRatio','Geometric.Roundness')
+     
+     for(feature in geomFeatures_Total)
+     {
+          x[is.finite(get(feature)), (paste0(feature, '.Total')):=sum(get(feature), na.rm=TRUE), by=c(idCols, 'MaskChannel2')]
+     }
+     for(feature in geomFeatures_SizeWeightedMean)
+     {
+          x[is.finite(get(feature)), (feature):=sum(get(feature)*weights, na.rm=TRUE), by=c(idCols, 'MaskChannel2')]
+     }
+     x[is.finite(countWeights), ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'MaskChannel2')]
+     
+     getPointStats <- function(x, y, weights)
+     {
+          if(length(x) > 1)
+          {
+               pts <- matrix(c(x, y), ncol=2)
+               circ <- getMinCircle(pts)
+          }
+          else if(length(x) == 1)
+          {
+               circ <- list(rad=1L, ctr=c(x,y))
+          }
+          else
+          {
+               return(lapply(list(Intensity=NA, WeightedIntensity=NA, ConvexArea=NA, ConvexPerimeter=NA), as.double))
+          }
+          pp <- ppp(x, y, window=disc(radius=circ$rad*1.01, centre=circ$ctr))
+          hull <- convexhull(pp)
+          ret <- lapply(list(Intensity=intensity(pp), WeightedIntensity=intensity(pp, weights=weights), ConvexArea=area(hull), ConvexPerimeter=perimeter(hull), Diameter=circ$rad), as.double)
+          if(ret$ConvexArea == 0 || ret$ConvexPerimeter == 0)
+          {
+               ret$Circularity <- 0
+          }
+          else
+          {
+               ret$Circularity <- as.double(4*pi*ret$ConvexArea/(ret$ConvexPerimeter*ret$ConvexPerimeter))
+          }
+          return(ret)
+     }
+     x[is.finite(Geometric.X), c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'MaskChannel2')]
+     x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
+     return(x)
 }
 
 standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, data.cols=NULL, data.cols.contains=NULL, by=NULL)
@@ -470,25 +656,25 @@ divideMAbyMBbyRef <- function(x, mA, mB)
 	return(x)
 }
 
-intIntensityNormalizeCentralMoments <- function(x)
-{
-	mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
-	for(mName in mNames)
-	{
-		x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
-	}
-	return(x)
-}
+# intIntensityNormalizeCentralMoments <- function(x)
+# {
+# 	mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
+# 	for(mName in mNames)
+# 	{
+# 		x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
+# 	}
+# 	return(x)
+# }
 
-meanNormalizeZernikeMoments <- function(x)
-{
-	mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
-	for(mName in mNames)
-	{
-		x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean')
-	}
-	return(x)
-}
+# meanNormalizeZernikeMoments <- function(x)
+# {
+# 	mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
+# 	for(mName in mNames)
+# 	{
+# 		x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean')
+# 	}
+# 	return(x)
+# }
 
 getRowsMatching <- function(x, col, baseName)
 {
@@ -651,12 +837,15 @@ unmergeChannelNames <- function(channelString)
 	return(list(channel1=temp[1], channel2=temp[2]))
 }
 
-calculateChannelDifferences <- function(x)
+#' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
+#' idCols should be the 'cId' and the 'MaskChannel'
+#' This will work on all 'ImageChannel's that aren't 'None' and don't have '_dot_' in them
+calculateChannelDifferences <- function(x, idCols=c('cId','MaskChannel'))
 {
-	if(length(unique(x$ImageChannel)) > 1)
+     uniqueChannels <- unique(x$ImageChannel)
+     uniqueChannels <- uniqueChannels[uniqueChannels != 'None']
+	if(length(uniqueChannels) > 1)
 	{
-		# Calculate differences between channels for each Cell and Measurement (but keep other column information too so include other cols in 'by')
-		idCols <- getAllColNamesExcept(x, c('Value','ImageChannel'))
 		return(x[ImageChannel != 'None' & !grepl('_dot_',ImageChannel,fixed=T),list(ImageChannel=getComboNames(ImageChannel), Value=getComboDifferences(Value)), by=idCols])
 
 	}else
@@ -666,21 +855,38 @@ calculateChannelDifferences <- function(x)
 	}
 }
 
-# Meant to be called on a subset of the main table
-calculateChannelProducts <- function(x)
+#' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
+#' idCols should be the 'cId' and the 'MaskChannel'
+#' This will work on all 'ImageChannel's that aren't 'None'
+calculateChannelProducts <- function(x, sep='_dot_', idCols=c('cId','MaskChannel'), mCols=NULL, mColContains=NULL)
 {
-	if(length(unique(x$ImageChannel)) > 1)
-	{
-		# Calculate differences between channels for each Cell and Measurement (but keep other column information too so include other cols in 'by')
-		idCols <- getAllColNamesExcept(x, c('Value','ImageChannel'))
-		x2 <- x[ImageChannel != 'None',list(ImageChannel=getComboNames(ImageChannel, '_times_'), Value=getComboProducts(Value)), by=idCols]
-	}else
+     uniqueChannels <- unique(x$ImageChannel)
+     uniqueChannels <- uniqueChannels[uniqueChannels != 'None']
+     
+     if(is.null(mCols))
+     {
+          mCols <- getColNamesContaining(x, mColContains)
+     }
+     
+     if(length(uniqueChannels) > 1)
+     {
+          x2 <- x[, lapply(.SD, FUN=getComboData, imch=ImageChannel, sep=sep), .SDcols=mCols, by=idCols]
+		# x2 <- x[ImageChannel != 'None', list(ImageChannel=getComboNames(ImageChannel, '_times_'), Value=getComboProducts(Value)), by=idCols]
+		return(x2)
+	}
+     else
 	{
 		# return an empty table with the same columns as provided
 		return(x[FALSE])
 	}
 }
 
+getComboData <- function(x, imch, sep)
+{
+     return(data.table(ImageChannel=getComboNames(imch, sep), Value=getComboProducts(x)))
+}
+
+# Meant to be called on a subset of the main table
 getComboNames <- function(x, operation='_minus_')
 {
 	if(length(x) < 2)
@@ -693,6 +899,7 @@ getComboNames <- function(x, operation='_minus_')
 	return(temp)
 }
 
+# Meant to be called on a subset of the main table
 getComboDifferences <- function(x)
 {
 	if(length(x) < 2)
@@ -704,6 +911,7 @@ getComboDifferences <- function(x)
 	return(temp)
 }
 
+# Meant to be called on a subset of the main table
 getComboProducts <- function(x)
 {
 	if(length(x) < 2)
@@ -742,6 +950,17 @@ calculateRMSofHaralick <- function(x, removeOriginalHaralickMeasures=FALSE)
 	}
 
 	return(data.table(x))
+}
+
+normalizeColsToOtherCol <- function(x, numeratorCols, denominatorCol='Stats.Sum')
+{
+     FUN <- function(a,b)
+     {
+          ret <- a/b
+          ret[!is.finite(ret)] <- NA
+          return(ret)
+     }
+     x[, c(numeratorCols):=lapply(.SD, FUN=FUN, get(denominatorCol)), .SDcols=numeratorCols][]
 }
 
 ##### Testing #####
