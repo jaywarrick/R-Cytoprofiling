@@ -267,31 +267,38 @@ getColNamesContaining <- function(x, name)
      return(names(x)[grepl(name,names(x),fixed=TRUE)])
 }
 
-removeColNamesContaining <- function(x, name)
+removeCols <- function(x, colsToRemove)
 {
-	colsToRemove <- getColNamesContaining(x,name)
-	print(paste0("Removing colums with names containing '", name, "'"))
-	for(colToRemove in colsToRemove)
-	{
-		print(colToRemove)
-		x[,(colToRemove):=NULL]
-	}
-	return(x)
+     print(paste0("Removing colums..."))
+     for(colToRemove in unique(colsToRemove))
+     {
+          if(colToRemove %in% names(x))
+          {
+               print(colToRemove)
+               x[,(colToRemove):=NULL]
+          }
+     }
+     return(x)
 }
 
 removeColsContainingNames <- function(x, namesToMatch)
 {
 	colsToRemove <- getColNamesContaining(x, namesToMatch[1])
-	print(paste0("Removing colums with names containing..."))
+	print(paste0("Finding colums with names containing..."))
 	for(nameToMatch in namesToMatch)
 	{
 		print(nameToMatch)
 		colsToRemove <- colsToRemove[colsToRemove %in% getColNamesContaining(x, nameToMatch)]
 	}
+	print("")
+	print("Removing columns...")
 	for(colToRemove in unique(colsToRemove))
 	{
-		print(colToRemove)
-		x[,(colToRemove):=NULL]
+	     if(colToRemove %in% names(x))
+	     {
+	          print(colToRemove)
+	          x[,(colToRemove):=NULL]
+	     }
 	}
 	return(x)
 }
