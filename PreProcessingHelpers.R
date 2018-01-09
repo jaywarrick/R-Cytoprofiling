@@ -584,7 +584,7 @@ getPointStats <- function(x, y, weights)
 #' 
 #' This function collapses the subregion data to just single values for each cell.
 #' 
-summarizeGeometry <- function(x, cellIdCols='cId')
+summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
 {
      idCols <- cellIdCols
      
@@ -666,7 +666,15 @@ summarizeGeometry <- function(x, cellIdCols='cId')
      
      # Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
      # Also remove helper columns
-     x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
+     if(removeXY)
+     {
+          x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
+     }
+     else
+     {
+          x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL)]
+     }
+     
      
      # Remove all the duplicate information that was created during calculations
      x <- unique(x)
