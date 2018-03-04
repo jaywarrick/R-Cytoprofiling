@@ -418,12 +418,7 @@ numColsTrue <- function(x, test, mCols=NULL, mColsContaining=NULL, mColFilter=NU
 
 removeColsWithNonFiniteVals <- function(x, cols=NULL)
 {
-	# Remove rows and columns of data contining non-finite data (typically inverses etc.)
-	temp.names <- copy(names(x))
-	lapply.data.table(x, FUN=function(n){if(any(!is.finite(n))){return(NULL)}else{return(n)}}, cols=Measurements, in.place=T)
-	print('Removed the following columns of non-finite data.')
-	temp.names <- temp.names[!(temp.names %in% names(x))]
-	print(temp.names)
+  removeColsMatching(x, cols=cols, col.test=function(n){any(!is.finite(n))})
 
 	# duh <- x[,lapply(.SD, function(y){length(which(!is.finite(y))) > 0}), .SDcols=getNumericCols(x)]
 	# duh2 <- getNumericCols(x)[as.logical(as.vector(duh))]
@@ -436,6 +431,16 @@ removeColsWithNonFiniteVals <- function(x, cols=NULL)
 	# 	print(col)
 	# 	x[,(col):=NULL]
 	# }
+}
+
+removeColsMatching <- function(x, cols=NULL, col.test=function(n){all(!is.finite(n))}, ...)
+{
+  # Remove rows and columns of data contining non-finite data (typically inverses etc.)
+  temp.names <- copy(names(x))
+  lapply.data.table(x, FUN=function(a){if(col.test(a, ...)){return(NULL)}else{return(a)}}, cols=cols, in.place=T)
+  print('Removed the following columns.')
+  temp.names <- temp.names[!(temp.names %in% names(x))]
+  print(temp.names)
 }
 
 getColNamesContaining <- function(x, name)
