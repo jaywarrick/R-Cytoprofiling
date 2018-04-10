@@ -34,10 +34,14 @@ duh <- x1[,list(meanNucRatio=mean(NucRatio)), by=.(Beads,Tx)]
 # x1[Beads=='Yes', NucRatio:=(NucRatio - YesMin) / YesRange]
 
 ##### PTR1
+pdf('G:/R01 Renewal/DensityPlot.pdf', width=6, height=4)
 y <- x1[Beads=='Yes' & Tx=='PTR1']
 n <- x1[Beads=='No' & Tx=='PTR1']
-plot(density(y$NucRatio, breaks=40))
-lines(density(n$NucRatio, breaks=40), col='red')
+toPlot <- density(y$NucRatio, n=40)
+toPlot2 <- density(n$NucRatio, n=40)
+plot(toPlot$x-0.0285, toPlot$y, xlab='Nuclear Fraction', ylab='Histogram Density', lwd=2, type='l')
+lines(toPlot2$x, toPlot2$y, lwd=2, col='red', lty=1)
+dev.off()
 wilcox.test(x=y$NucRatio, y=n$NucRatio)
 wilcox.test(x=y$Mean_Red_Nuc, y=n$Mean_Red_Nuc)
 wilcox.test(x=y$Mean_Red_Cyt, y=n$Mean_Red_Cyt)
@@ -88,3 +92,9 @@ wilcox.test(x=y$Mean_Red_Cyt, y=n$Mean_Red_Cyt)
 plot(y$Mean_Red_Nuc, y$Mean_Red_Cyt, pch=20, col=adjustcolor('red', alpha.f=0.5))
 points(n$Mean_Red_Nuc, n$Mean_Red_Cyt, pch=20, col=adjustcolor('blue', alpha.f=0.5))
 
+
+##### Cell insets #####
+x1[Beads=='No' & Id=='17' & Tx=='PTR1' & Well==2]
+x1[Beads=='No' & Id=='22' & Tx=='PTR1' & Well==2]
+
+x1[Beads=='No' & Tx=='PTR1' & Well==2, c('Id','NucRatio'), with=F]
