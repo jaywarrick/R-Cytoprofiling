@@ -696,6 +696,37 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      return(x)
 }
 
+summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
+{
+	# Summarize Symmetry Data
+	toDelete <- getColNamesContaining(x,'SymmetryCorrelation')
+	setnames(x, 'SymmetryCorrelation.1.1', 'SymmetryCorrelation.1.Avg')
+	sym2 <- getColNamesContaining(x,'SymmetryCorrelation.2')
+	sym3 <- getColNamesContaining(x,'SymmetryCorrelation.3')
+	sym4 <- getColNamesContaining(x,'SymmetryCorrelation.4')
+	x[, SymmetryCorrelation.2.Avg:=apply(.SD,1,mean,na.rm=T), .SDcols=sym2]
+	x[, SymmetryCorrelation.3.Avg:=apply(.SD,1,mean,na.rm=T), .SDcols=sym3]
+	x[, SymmetryCorrelation.4.Avg:=apply(.SD,1,mean,na.rm=T), .SDcols=sym4]
+	x[, c(sym2,sym3,sym4):=NULL]
+	x[, SymmetryLobe.1:=SymmetryAmplitude.1*SymmetryCorrelation.1.Avg]
+	x[, SymmetryLobe.2:=SymmetryAmplitude.2*SymmetryCorrelation.2.Avg]
+	x[, SymmetryLobe.3:=SymmetryAmplitude.3*SymmetryCorrelation.3.Avg]
+	x[, SymmetryLobe.4:=SymmetryAmplitude.4*SymmetryCorrelation.4.Avg]
+	correlationNames <- c(getColNamesContaining(x,'SymmetryCorrelation'), getColNamesContaining(x,'SymmetryLobe'))
+	if(length(correlationNames) > 0 & sim.trans)
+	{
+		lapply.data.table(x, FUN=sim.transform, cols=correlationNames, in.place=T)
+		setnames(x, correlationNames, paste0(correlationNames, '.Similarity'))
+	}
+	ampNames <- getColNamesContaining(x, 'SymmetryAmplitude')
+	if(length(ampNames) > 0 & logit.trans)
+	{
+		# Use logit transform for amplitudes because from 0 to 1
+		lapply.data.table(x, FUN=logitTransform, cols=ampNames, in.place=T)
+		setnames(x, ampNames, paste0(ampNames, '.Logit'))
+	}
+}
+
 standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T)
 {
      # x <- data.table(a=1.1:3.1, b=4.1:6.1, c=c(100.1,110.1,120.1)); duh <- copy(x); duh2 <- as.data.table(lapply(x, log))
