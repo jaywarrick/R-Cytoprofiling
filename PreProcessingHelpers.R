@@ -601,12 +601,17 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      
      # Gather important columns for segregating the data for calculations
      colsToSummarize <- getColNamesContaining(x, 'Geometric.')
+     colsToSummarize <- colsToSummarize[!(colsToSummarize %in% c('Geometric.COMX','Geometric.COMY','Geometric.MaximaX','Geometric.MaximaY'))]
      colsToKeep <- getAllColNamesExcept(x, colsToSummarize)
      
      # Table to keep
      tableToKeep <- x[, mget(colsToKeep)]
      rowsToDiscard <- allColsTrue(tableToKeep, test=is.na, mCols=getAllColNamesExcept(tableToKeep, c(idCols,'ImageChannel','MaskChannel')))
      tableToKeep <- tableToKeep[!rowsToDiscard]
+     if(any(grepl('.p', tableToKeep$MaskChannel, fixed=T)))
+     {
+     	stop("There shouldn't be any .p nomenclature left over in the MaskChannel column at this step within the function. Check to see if all of the id columns were provided. Aborting.")
+     }
      
      # Table to summarize
      x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
@@ -685,7 +690,7 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      x <- unique(x)
      
      # Now merge tableToKeep and x
-     x <- merge(tableToKeep, x, all=T)
+     x <- merge(x=tableToKeep, y=x, by=c(idCols, 'MaskChannel', 'ImageChannel'), all=T)
      
      # Return the result
      return(x)
