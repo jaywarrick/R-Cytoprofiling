@@ -671,8 +671,11 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      # Create new count columns (this also results in duplicate row information)
      x[, ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
      
-     # Calculate point stats
-     x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     if(all(c('Geometric.X','Geometric.Y') %in% names(x)))
+     {
+       # Calculate point stats
+       x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     }
      
      # Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
      # Also remove helper columns
@@ -727,7 +730,7 @@ summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
 	}
 }
 
-standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T)
+standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, col.use.percentiles=F, percentiles=c(0.05,0.95), data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T, na.rm.no.variance.cols=F)
 {
      # x <- data.table(a=1.1:3.1, b=4.1:6.1, c=c(100.1,110.1,120.1)); duh <- copy(x); duh2 <- as.data.table(lapply(x, log))
      # data.cols <- c('b','c')
@@ -742,7 +745,7 @@ standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.me
      cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
 
      # Remove cols with now variance
-     removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded)
+     removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm.no.variance.cols)
 
      # Redefine cols just in case
      cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
@@ -761,21 +764,26 @@ standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.me
           x[, rowNum:=NULL] # Remove the rowNum column
      }
 
-     x[,c(cols):=lapply(.SD, robustScale, use.median=col.use.median, use.mad=col.use.mad, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
+     x[,c(cols):=lapply(.SD, robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
      return(x)
 }
 
 # Now perform regular column standardization (grouping as appropriate using 'by')
-robustScale <- function(x, use.median, use.mad, trySDIfNeeded=T)
+robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c(0.05,0.95), trySDIfNeeded=T)
 {
      if(use.median)
      {
           m <- median(x[is.finite(x)], na.rm=TRUE)
      }
-     else
+     else if(use.percentiles)
      {
-          m <- mean(x[is.finite(x)], na.rm=TRUE)
+     	l(lo, hi) %=% getPercentileLimits(x[is.finite(x)], lower=percentiles[1], upper=percentiles[2])
+          m <- mean(c(lo,hi))
      }
+	else
+	{
+		m <- mean(x[is.finite(x)], na.rm=TRUE)
+	}
      
      if(use.mad)
      {
@@ -785,17 +793,22 @@ robustScale <- function(x, use.median, use.mad, trySDIfNeeded=T)
                sig <- sd(x[is.finite(x)], na.rm=TRUE)
           }
      }
+	else if(use.percentiles)
+	{
+		l(daMin, daMax) %=% qnorm(percentiles)
+		sig <- (hi-lo)/(daMax-daMin)
+	}
      else
      {
           sig <- sd(x[is.finite(x)], na.rm=TRUE)
      }
-     
+	
      return((x-m)/sig)
 }
 
-removeNoVarianceCols <- function(x, use.mad=F, cols=NULL, by=NULL, trySDIfNeeded=T)
+removeNoVarianceCols <- function(x, use.mad=F, cols=NULL, by=NULL, trySDIfNeeded=T, na.rm=F)
 {
-     namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded)
+     namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm)
      if(length(namesToRemove) > 0)
      {
           if(use.mad)
@@ -826,12 +839,24 @@ tempSD1 <- function(y, trySD)
 
 tempSD2 <- function(y, trySD)
 {
-     return(sd(y, na.rm = TRUE))
+     return(sd(y[is.finite(y)], na.rm = TRUE))
 }
 
-getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T)
+#'@param na.rm is whether or not to keep cols with groups for which an SD or MAD cannot be calculated (e.g., only 1 value or no values).
+#'This is different than if the SD or MAD calculates to 0. If a 0 is encountered for a group, the col will be removed.
+#'
+getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T, na.rm=F)
 {
      cols <- getNumericColsOfInterest(x, data.cols=cols)
+     tempMin <- function(x, na.rm)
+     {
+     	ret <- min(x, na.rm=na.rm)
+     	if(is.na(ret))
+     	{
+     		return(0)
+     	}
+     	return(ret)
+     }
      if(use.mad)
      {
           tempSD <- tempSD1
@@ -842,7 +867,7 @@ getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T)
           else
           {
                tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
-               tempNames <- tempNames[, lapply(.SD, min), .SDcols=cols]
+               tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
           }
      }
      else
@@ -855,7 +880,7 @@ getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T)
           else
           {
                tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
-               tempNames <- tempNames[, lapply(.SD, min), .SDcols=cols]
+               tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
           }
      }
      return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
