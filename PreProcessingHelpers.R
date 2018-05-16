@@ -498,7 +498,7 @@ removeColsContaining <- function(x, stringsToMatch)
 fixColNames <- function(x)
 {
 	replaceStringInColNames(x, ' ', '')
-	replaceStringInColNames(x, '\\$', '.')
+	replaceStringInColNames(x, '$', '.')
 	replaceStringInColNames(x, ':', '_')
 }
 
@@ -935,6 +935,17 @@ standardizeLongData <- function(x, by=c('MaskChannel','ImageChannel','Measuremen
 	}
 	x <- removeNoMADMeasurements(x, by=by)
 	x[,Value:=robustScale(Value,Measurement),by=by]
+	return(x)
+}
+
+standardizeLongData2 <- function(x, val.col='Value', by)
+{
+	robustScale <- function(x)
+	{
+		m <- median(x, na.rm=TRUE)
+		return((x-m)/mad(x, center=m, na.rm=TRUE))
+	}
+	x[,c(val.col):=robustScale(get(val.col)),by=by]
 	return(x)
 }
 
