@@ -132,22 +132,25 @@ getTableListFromDB <- function(db, ds, x, y, objectName, isArff=F, storeFilePath
 			temp$Class <- as.character(temp$Class)
 		}
 		
-		# Create a column with a complex Id that will be completely unique for each sample
-		idColsFound <- cIdCols[cIdCols %in% names(temp)]
-		cat(names(temp))
-		if(length(idColsFound) == 0)
+		if(length(cIdCols) > 0)
 		{
+			# Create a column with a complex Id that will be completely unique for each sample
+			idColsFound <- cIdCols[cIdCols %in% names(temp)]
 			cat(names(temp))
-			stop('Must specify cIds for this function to enable sampling.')
+			if(length(idColsFound) == 0)
+			{
+				cat(names(temp))
+				stop('Must specify cIds for this function to enable sampling.')
+			}
+			if(length(idColsFound) != length(cIdCols))
+			{
+				warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
+			}
+			temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
+			
+			# put the complex Id first and the class column last
+			setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
 		}
-		if(length(idColsFound) != length(cIdCols))
-		{
-			warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
-		}
-		temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
-		
-		# put the complex Id first and the class column last
-		setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
 		
 		# Put the 'Class' column as the last column of the table
 		if('Class' %in% names(temp))
@@ -169,7 +172,7 @@ getTableListFromDB <- function(db, ds, x, y, objectName, isArff=F, storeFilePath
 		}
 		
 		# Grab the randomly sampled rows of the file
-		if(!is.null(sampleSize))
+		if(!is.null(sampleSize) && length(cIdCols) > 0)
 		{
 			rIds <- trySample(unique(temp$cId), subSampleSize)
 			temp <- temp[cId %in% rIds]

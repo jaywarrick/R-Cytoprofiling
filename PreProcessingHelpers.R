@@ -601,12 +601,17 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      
      # Gather important columns for segregating the data for calculations
      colsToSummarize <- getColNamesContaining(x, 'Geometric.')
+     colsToSummarize <- colsToSummarize[!(colsToSummarize %in% c('Geometric.COMX','Geometric.COMY','Geometric.MaximaX','Geometric.MaximaY'))]
      colsToKeep <- getAllColNamesExcept(x, colsToSummarize)
      
      # Table to keep
      tableToKeep <- x[, mget(colsToKeep)]
      rowsToDiscard <- allColsTrue(tableToKeep, test=is.na, mCols=getAllColNamesExcept(tableToKeep, c(idCols,'ImageChannel','MaskChannel')))
      tableToKeep <- tableToKeep[!rowsToDiscard]
+     if(any(grepl('.p', tableToKeep$MaskChannel, fixed=T)))
+     {
+     	stop("There shouldn't be any .p nomenclature left over in the MaskChannel column at this step within the function. Check to see if all of the id columns were provided. Aborting.")
+     }
      
      # Table to summarize
      x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
@@ -666,8 +671,11 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      # Create new count columns (this also results in duplicate row information)
      x[, ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
      
-     # Calculate point stats
-     x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     if(all(c('Geometric.X','Geometric.Y') %in% names(x)))
+     {
+       # Calculate point stats
+       x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     }
      
      # Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
      # Also remove helper columns
@@ -685,13 +693,44 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      x <- unique(x)
      
      # Now merge tableToKeep and x
-     x <- merge(tableToKeep, x, all=T)
+     x <- merge(x=tableToKeep, y=x, by=c(idCols, 'MaskChannel', 'ImageChannel'), all=T)
      
      # Return the result
      return(x)
 }
 
-standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T)
+summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
+{
+	# Summarize Symmetry Data
+	toDelete <- getColNamesContaining(x,'SymmetryCorrelation')
+	setnames(x, 'SymmetryCorrelation.1.1', 'SymmetryCorrelation.1.Avg')
+	sym2 <- getColNamesContaining(x,'SymmetryCorrelation.2')
+	sym3 <- getColNamesContaining(x,'SymmetryCorrelation.3')
+	sym4 <- getColNamesContaining(x,'SymmetryCorrelation.4')
+	x[, SymmetryCorrelation.2.Avg:=apply(.SD,1,mean,na.rm=T), .SDcols=sym2]
+	x[, SymmetryCorrelation.3.Avg:=apply(.SD,1,mean,na.rm=T), .SDcols=sym3]
+	x[, SymmetryCorrelation.4.Avg:=apply(.SD,1,mean,na.rm=T), .SDcols=sym4]
+	x[, c(sym2,sym3,sym4):=NULL]
+	x[, SymmetryLobe.1:=SymmetryAmplitude.1*SymmetryCorrelation.1.Avg]
+	x[, SymmetryLobe.2:=SymmetryAmplitude.2*SymmetryCorrelation.2.Avg]
+	x[, SymmetryLobe.3:=SymmetryAmplitude.3*SymmetryCorrelation.3.Avg]
+	x[, SymmetryLobe.4:=SymmetryAmplitude.4*SymmetryCorrelation.4.Avg]
+	correlationNames <- c(getColNamesContaining(x,'SymmetryCorrelation'), getColNamesContaining(x,'SymmetryLobe'))
+	if(length(correlationNames) > 0 & sim.trans)
+	{
+		lapply.data.table(x, FUN=sim.transform, cols=correlationNames, in.place=T)
+		setnames(x, correlationNames, paste0(correlationNames, '.Similarity'))
+	}
+	ampNames <- getColNamesContaining(x, 'SymmetryAmplitude')
+	if(length(ampNames) > 0 & logit.trans)
+	{
+		# Use logit transform for amplitudes because from 0 to 1
+		lapply.data.table(x, FUN=logitTransform, cols=ampNames, in.place=T)
+		setnames(x, ampNames, paste0(ampNames, '.Logit'))
+	}
+}
+
+standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, col.use.percentiles=F, percentiles=c(0.05,0.95), data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T, na.rm.no.variance.cols=F)
 {
      # x <- data.table(a=1.1:3.1, b=4.1:6.1, c=c(100.1,110.1,120.1)); duh <- copy(x); duh2 <- as.data.table(lapply(x, log))
      # data.cols <- c('b','c')
@@ -706,7 +745,7 @@ standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.me
      cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
 
      # Remove cols with now variance
-     removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded)
+     removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm.no.variance.cols)
 
      # Redefine cols just in case
      cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
@@ -725,21 +764,26 @@ standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.me
           x[, rowNum:=NULL] # Remove the rowNum column
      }
 
-     x[,c(cols):=lapply(.SD, robustScale, use.median=col.use.median, use.mad=col.use.mad, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
+     x[,c(cols):=lapply(.SD, robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
      return(x)
 }
 
 # Now perform regular column standardization (grouping as appropriate using 'by')
-robustScale <- function(x, use.median, use.mad, trySDIfNeeded=T)
+robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c(0.05,0.95), trySDIfNeeded=T)
 {
      if(use.median)
      {
           m <- median(x[is.finite(x)], na.rm=TRUE)
      }
-     else
+     else if(use.percentiles)
      {
-          m <- mean(x[is.finite(x)], na.rm=TRUE)
+     	l(lo, hi) %=% getPercentileLimits(x[is.finite(x)], lower=percentiles[1], upper=percentiles[2])
+          m <- mean(c(lo,hi))
      }
+	else
+	{
+		m <- mean(x[is.finite(x)], na.rm=TRUE)
+	}
      
      if(use.mad)
      {
@@ -749,17 +793,22 @@ robustScale <- function(x, use.median, use.mad, trySDIfNeeded=T)
                sig <- sd(x[is.finite(x)], na.rm=TRUE)
           }
      }
+	else if(use.percentiles)
+	{
+		l(daMin, daMax) %=% qnorm(percentiles)
+		sig <- (hi-lo)/(daMax-daMin)
+	}
      else
      {
           sig <- sd(x[is.finite(x)], na.rm=TRUE)
      }
-     
+	
      return((x-m)/sig)
 }
 
-removeNoVarianceCols <- function(x, use.mad=F, cols=NULL, by=NULL, trySDIfNeeded=T)
+removeNoVarianceCols <- function(x, use.mad=F, cols=NULL, by=NULL, trySDIfNeeded=T, na.rm=F)
 {
-     namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded)
+     namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm)
      if(length(namesToRemove) > 0)
      {
           if(use.mad)
@@ -790,12 +839,24 @@ tempSD1 <- function(y, trySD)
 
 tempSD2 <- function(y, trySD)
 {
-     return(sd(y, na.rm = TRUE))
+     return(sd(y[is.finite(y)], na.rm = TRUE))
 }
 
-getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T)
+#'@param na.rm is whether or not to keep cols with groups for which an SD or MAD cannot be calculated (e.g., only 1 value or no values).
+#'This is different than if the SD or MAD calculates to 0. If a 0 is encountered for a group, the col will be removed.
+#'
+getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T, na.rm=F)
 {
      cols <- getNumericColsOfInterest(x, data.cols=cols)
+     tempMin <- function(x, na.rm)
+     {
+     	ret <- min(x, na.rm=na.rm)
+     	if(is.na(ret))
+     	{
+     		return(0)
+     	}
+     	return(ret)
+     }
      if(use.mad)
      {
           tempSD <- tempSD1
@@ -806,7 +867,7 @@ getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T)
           else
           {
                tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
-               tempNames <- tempNames[, lapply(.SD, min), .SDcols=cols]
+               tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
           }
      }
      else
@@ -819,7 +880,7 @@ getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T)
           else
           {
                tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
-               tempNames <- tempNames[, lapply(.SD, min), .SDcols=cols]
+               tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
           }
      }
      return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
