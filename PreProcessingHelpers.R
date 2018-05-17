@@ -55,296 +55,22 @@ refactor <- function(x)
 	return(x[,lapply(.SD, function(x){if(is.factor(x)){factor(x)}else{x}})])
 }
 
-##### Table IO #####
-
-getTableListFromDB <- function(db, ds, x, y, objectName, isArff=F, storeFilePath=F, class=NULL, assignClass=T, expt=NULL, repl=NULL, sampleSize=NULL, colsToRemove = c(), cIdCols = c(), fsep='\\\\')
-{
-     tableList <- list()
-     
-     jData <- getData(db=db, ds=ds, x=x, y=y, type='File', name=objectName)
-     fileList <- jData$fileList
-     
-     if(!is.null(sampleSize))
-     {
-          subSampleSize <- sampleSize / length(fileList)
-     }
-     
-     # For each file in the fileList
-     for(f in fileList)
-     {
-          # Read the file in
-          print(paste0('Reading file: ', f))
-          
-          if(isArff)
-          {
-               library(foreign)
-               temp <- data.table(read.arff(f))
-          }
-          else
-          {
-               temp <- fread(f)
-          }
-          
-          # Store the filepath that was imported if desired
-          if(storeFilePath)
-          {
-               temp$File <- f	
-          }
-          
-          # Store the name/number of the experiment/replicate associated with this file
-          if(!is.null(expt))
-          {
-               temp$Expt <- expt
-          }
-          if(!is.null(replicate))
-          {
-               temp$Repl <- repl
-          }
-          
-          # Create/Assign a 'Class' column
-          if(!is.null(class) && assignClass)
-          {
-               temp$Class <- class
-          }
-          else if(!is.null(class) && !assignClass)
-          {
-               setnames(temp,class,'Class')
-               temp$Class <- as.character(temp$Class)
-          }
-          
-          # Create a column with a complex Id that will be completely unique for each sample
-          idColsFound <- cIdCols[cIdCols %in% names(temp)]
-          cat(names(temp))
-          if(length(idColsFound) == 0)
-          {
-               cat(names(temp))
-               stop('Must specify cIds for this function to enable sampling.')
-          }
-          if(length(idColsFound) != length(cIdCols))
-          {
-               warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
-          }
-          temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
-          
-          # put the complex Id first and the class column last
-          setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
-          
-          # Put the 'Class' column as the last column of the table
-          if('Class' %in% names(temp))
-          {
-               setcolorder(temp, c(names(temp)[names(temp) != 'Class'], 'Class'))
-          }
-          
-          # Remove specified columns from the data
-          for(tempCol in colsToRemove)
-          {
-               if(tempCol %in% names(temp))
-               {
-                    temp[,c(tempCol) := NULL]
-               }
-               else
-               {
-                    warning(paste(tempCol, 'is not a column of the data table so it cannot be removed'))
-               }
-          }
-          
-          # Grab the randomly sampled rows of the file
-          if(!is.null(sampleSize))
-          {
-               rIds <- trySample(unique(temp$cId), subSampleSize)
-               temp <- temp[cId %in% rIds]
-          }
-          
-          # Print the column names for a little feedback
-          print(names(temp))
-          
-          # Append this table to the list of tables provided.
-          tableList <- append(tableList, list(temp))
-     }
-     return(tableList)
-}
-
-getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cellIds=NULL)
-{
-	if(!is.null(sampleSize))
-	{
-		subSampleSize <- sampleSize / length(fileList)
-	}
-	tableList <- list()
-	for(f in fileList)
-	{
-		print(paste0('Reading file: ', file.path(dir, f)))
-		temp <- fread(file.path(dir, f))
-		temp$Class <- class
-		temp$Expt <- expt
-		if('Z' %in% names(temp))
-		{
-			temp[,Z:=NULL]
-		}
-		if('A' %in% names(temp))
-		{
-			temp[,A:=NULL]
-		}
-		if('B' %in% names(temp))
-		{
-			temp[,B:=NULL]
-		}
-		if(!('ImRow' %in% names(temp)))
-		{
-			temp$ImRow <- 1
-		}
-		if(!('ImCol' %in% names(temp)))
-		{
-			temp$ImCol <- 1
-		}
-		if(!('Loc' %in% names(temp)))
-		{
-			temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
-		}
-		temp$file <- f
-		temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
-		temp[,ImRow:=NULL]
-		temp[,ImCol:=NULL]
-		if(!is.null(cellIds))
-		{
-		     rIds <- cellIds
-		     temp <- temp[cId %in% rIds]
-		}
-		if(!is.null(sampleSize))
-		{
-			rIds <- trySample(unique(temp$cId), subSampleSize)
-			temp <- temp[cId %in% rIds]
-		}
-		tableList <- append(tableList, list(temp))
-	}
-	return(tableList)
-}
-
-getTableList <- function(dir, featureTable, colocTable, class, expt, sampleSize=NULL, cellIds=NULL)
-{
-     if(!is.null(sampleSize))
-     {
-          subSampleSize <- sampleSize / length(fileList)
-     }
-     tableList <- list()
-     for(f in fileList)
-     {
-          print(paste0('Reading file: ', file.path(dir, f)))
-          temp <- fread(file.path(dir, f))
-          temp$Class <- class
-          temp$Expt <- expt
-          if('Z' %in% names(temp))
-          {
-               temp[,Z:=NULL]
-          }
-          if('A' %in% names(temp))
-          {
-               temp[,A:=NULL]
-          }
-          if('B' %in% names(temp))
-          {
-               temp[,B:=NULL]
-          }
-          if(!('ImRow' %in% names(temp)))
-          {
-               temp$ImRow <- 1
-          }
-          if(!('ImCol' %in% names(temp)))
-          {
-               temp$ImCol <- 1
-          }
-          if(!('Loc' %in% names(temp)))
-          {
-               temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
-          }
-          temp$file <- f
-          temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
-          temp[,ImRow:=NULL]
-          temp[,ImCol:=NULL]
-          if(!is.null(cellIds))
-          {
-               rIds <- cellIds
-               temp <- temp[cId %in% rIds]
-          }
-          if(!is.null(sampleSize))
-          {
-               rIds <- trySample(unique(temp$cId), subSampleSize)
-               temp <- temp[cId %in% rIds]
-          }
-          tableList <- append(tableList, list(temp))
-     }
-     return(tableList)
-}
-
-getXYCSVsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
-{
-	ret <- list()
-	fList <- list.files(path = dir, recursive = TRUE)
-	for(f in fList)
-	{
-		if((grepl('x', f) || grepl('y', f)) & grepl('.csv', f))
-		{
-			fileName <- strsplit(f, "\\.")[[1]][1]
-			ret[[fileName]] <- getXYCSVAsTable(dir, f, xName, xExpression, yName, yExpression)
-		}
-	}
-	retTable <- rbindlist(ret)
-	return(retTable)
-}
-
-getXYCSVAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
-{
-	fileName <- strsplit(file, "\\.")[[1]][1]
-	xy <- strsplit(fileName, "_")[[1]]
-	y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
-	x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
-	xVal <- eval(parse(text=xExpression))
-	yVal <- eval(parse(text=yExpression))
-	print(paste0('Reading ', file.path(dir,file), ' as ', xName, '=', xVal, ', ', yName, '=', yVal, '.'))
-	theTable <- fread(file.path(dir,file))
-	theTable[,(xName),with=FALSE] <- xVal
-	theTable[,(yName),with=FALSE] <- yVal
-	return(theTable)
-}
-
-getXYArffsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
-{
-	ret <- list()
-	fList <- list.files(path = dir, recursive = TRUE)
-	for(f in fList)
-	{
-		if((grepl('x', f) || grepl('y', f)) & grepl('.arff', f))
-		{
-			fileName <- strsplit(f, "\\.")[[1]][1]
-			ret[[fileName]] <- getXYArffAsTable(dir, f, xName, xExpression, yName, yExpression)
-		}
-	}
-	retTable <- rbindlist(ret)
-	return(retTable)
-}
-
-getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
-{
-	fileName <- strsplit(file, "\\.")[[1]][1]
-	xy <- strsplit(fileName, "_")[[1]]
-	y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
-	x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
-	xVal <- eval(parse(text=xExpression))
-	yVal <- eval(parse(text=yExpression))
-	print(paste0('Reading ', file.path(dir,file), ' as ', xName, '=', xVal, ', ', yName, '=', yVal, '.'))
-	theTable <- read.arff(file.path(dir,file))
-	theTable[,xName] <- xVal
-	theTable[,yName] <- yVal
-	return(data.table(theTable))
-}
-
 ##### Wide Table Operations #####
+
+divideManyColsByOneCol <- function(x, numeratorCols, denominatorCol='Stats.Sum')
+{
+	FUN <- function(a,b)
+	{
+		ret <- a/b
+		ret[!is.finite(ret)] <- NA
+		return(ret)
+	}
+	x[, c(numeratorCols):=lapply(.SD, FUN=FUN, get(denominatorCol)), .SDcols=numeratorCols][]
+}
 
 divideColAByColB <- function(x, colA, colB)
 {
-	x[get(colB)==0,(colA):=NA]
-	x[get(colB)!=0,(colA):=get(colA)/get(colB)]
-	return(x)
+	return(divideManyColsByOneCol(x, numeratorCols = colA, denominatorCol=colB))
 }
 
 #' The function grabs each column one by one. The function
@@ -416,21 +142,14 @@ numColsTrue <- function(x, test, mCols=NULL, mColsContaining=NULL, mColFilter=NU
      return(ret)
 }
 
-removeColsWithNonFiniteVals <- function(x, cols=NULL)
+removeColsWithAnyNonFiniteVals <- function(x, cols=NULL)
 {
   removeColsMatching(x, cols=cols, col.test=function(n){any(!is.finite(n))})
+}
 
-	# duh <- x[,lapply(.SD, function(y){length(which(!is.finite(y))) > 0}), .SDcols=getNumericCols(x)]
-	# duh2 <- getNumericCols(x)[as.logical(as.vector(duh))]
-	# if(length(duh2 > 0))
-	# {
-	# 	print("Removing cols with infinite values...")
-	# }
-	# for(col in duh2)
-	# {
-	# 	print(col)
-	# 	x[,(col):=NULL]
-	# }
+removeColsWithAllNonFiniteVals <- function(x, cols=NULL)
+{
+	removeColsMatching(x, cols=cols, col.test=function(n){all(!is.finite(n))})
 }
 
 removeColsMatching <- function(x, cols=NULL, col.test=function(n){all(!is.finite(n))}, ...)
@@ -497,9 +216,13 @@ removeColsContaining <- function(x, stringsToMatch)
 
 fixColNames <- function(x)
 {
-	replaceStringInColNames(x, ' ', '')
-	replaceStringInColNames(x, '\\$', '.')
-	replaceStringInColNames(x, ':', '_')
+	replaceSubstringInColNames(x,'_Order_','')
+	replaceSubstringInColNames(x,'_Rep_','')
+	replaceSubstringInColNames(x,'$','.')
+	replaceSubstringInColNames(x,'net.imagej.ops.Ops.','')
+	replaceSubstringInColNames(x,'function.ops.JEXOps.','')
+	replaceSubstringInColNames(x,' ','')
+	replaceSubstringInColNames(x,':','_')
 }
 
 getAllColNamesExcept <- function(x, names)
@@ -531,19 +254,11 @@ getNonNumericCols <- function(x)
 	return(names(x)[!unlist(x[,lapply(.SD, is.numeric)])])
 }
 
-replaceStringInColNames <- function(x, old, new)
+replaceSubstringInColNames <- function(x, old, new)
 {
 	oldNames <- names(x)
 	newNames <- gsub(old, new, names(x), fixed=T)
 	setnames(x, oldNames, newNames)
-}
-
-getWideTable <- function(x)
-{
-	idCols <- getAllColNamesExcept(x, c('Value','Measurement'))
-	x <- reorganize(x, idCols)
-	x <- sortColsByName(x);
-	return(x)
 }
 
 sortColsByName <- function(x)
@@ -888,22 +603,48 @@ getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T, n
 
 ##### Long Table Operations #####
 
-divideMAbyMBbyRef <- function(x, mA, mB)
+#' This is verified to work with randomly ordered tables.
+divideMAbyMBbyRef <- function(x, mA, mB, idCols='cId')
 {
-	mATable <- x[Measurement==mA]
-	mBTable <- x[Measurement==mB]
-	if(nrow(mATable) != nrow(mBTable))
+	tempDivide <- function(values, Measurement, mA, mB)
 	{
-		# Try to perform the operation on the subset of the mB column (can't do reverse because we are editing the mA column)
-		mBTable <- mBTable[MaskChannel %in% unique(mATable$MaskChannel)]
-		if(nrow(mATable) != nrow(mBTable))
+		a <- values[Measurement==mA]
+		b <- values[Measurement==mB]
+		if(any(!is.finite(c(a,b))))
 		{
-			stop('Number of rows for these measurements do not match! Aborting operation.')
+			return(NA)
+		}
+		if(length(a) != 1 || length(b) != 1)
+		{
+			stop("Id cols were specific enough to produce one value for each id")
+		}
+		else
+		{
+			if(Measurement[1]==mA)
+			{
+				return(c(a/b, b))	
+			}
+			else
+			{
+				return(c(b, a/b))
+			}
 		}
 	}
-	ret <- mATable$Value / mBTable$Value
-	x[Measurement==mA]$Value <- ret
-	return(x)
+	x[Measurement %in% c(mA,mB), Value:=tempDivide(Value, Measurement, mA, mB), by=idCols]
+	# mATable <- x[Measurement==mA]
+	# mBTable <- x[Measurement==mB]
+	# if(nrow(mATable) != nrow(mBTable))
+	# {
+	# 	# Try to perform the operation on the subset of the mB column (can't do reverse because we are editing the mA column)
+	# 	mBTable <- mBTable[MaskChannel %in% unique(mATable$MaskChannel)]
+	# 	if(nrow(mATable) != nrow(mBTable))
+	# 	{
+	# 		stop('Number of rows for these measurements do not match! Aborting operation.')
+	# 	}
+	# }
+	# ret <- mATable$Value / mBTable$Value
+	# x[Measurement==mA]$Value <- ret
+	# return(x)
 }
 
 #' JEX outputs the normalized (size scale invariant) central moments already
@@ -913,12 +654,12 @@ divideMAbyMBbyRef <- function(x, mA, mB)
 #' made to be contrast invariant by dividing by the mean
 #' so, tending to avoid use of these basic moments now since they are directional.
 #' If we want rotationally invariant, then we have Hu's.
-# intIntensityNormalizeCentralMoments <- function(x)
+# intIntensityNormalizeCentralMoments <- function(x, idCols='cId')
 # {
 # 	mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
 # 	for(mName in mNames)
 # 	{
-# 		x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
+# 		x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum', idCols=idCols)
 # 	}
 # 	return(x)
 # }
@@ -941,29 +682,13 @@ getLongTableFromTemplate <- function(x, longTemplate)
 getMeasurementNamesContaining <- function(x, name)
 {
 	ms <- unique(x$Measurement)
-	return(ms[grepl(name,ms)])
-}
-
-getMomentTable <- function(x, baseName='ImageMoments.CentralMoment')
-{
-	theNames <- unique(x[['Measurement']])
-	theNames <- theNames[grepl(baseName,theNames, fixed=TRUE)]
-	start <- nchar(baseName)
-	orders <- substr(theNames, start+1, start+2)
-	ret <- data.frame(Measurement=theNames, orderx=as.numeric(substr(orders,1,1)), ordery=as.numeric(substr(orders,2,2)))
-	return(ret)
+	return(ms[grepl(name,ms,fixed=T)])
 }
 
 removeMeasurementNamesContaining <- function(x, name)
 {
 	namesToRemove <- getMeasurementNamesContaining(x, name)
-	print("Removing the following Measurements...")
-	for(name in namesToRemove)
-	{
-		print(name)
-	}
-	x <- x[!(Measurement %in% namesToRemove)]
-	return(x)
+	return(removeMeasurementNames(x, namesToRemove))
 }
 
 removeMeasurementNames <- function(x, names)
@@ -977,93 +702,9 @@ removeMeasurementNames <- function(x, names)
      return(x)
 }
 
-standardizeLongData <- function(x, by=c('MaskChannel','ImageChannel','Measurement','Expt'))
-{
-	robustScale <- function(x, measurement)
-	{
-		if(substr(measurement,1,12) == 'ZernikePhase')
-		{
-			return(x)
-		}
-		else
-		{
-			m <- median(x, na.rm=TRUE)
-			return((x-m)/mad(x, center=m, na.rm=TRUE))
-		}
-	}
-	x <- removeNoMADMeasurements(x, by=by)
-	x[,Value:=robustScale(Value,Measurement),by=by]
-	return(x)
-}
-
-removeNoVarianceMeasurements <- function(x, val='Value', by=c('MaskChannel','ImageChannel','Measurement','Expt'))
-{
-	# See if we have any columns to remove and record the info for reporting
-	temp <- x[,list(stdev=sd(get(val))), by=by]
-	temp <- data.frame(temp[stdev == 0])
-	print("Removing measurements with 0 variance...")
-	print(temp)
-	# Tempororarily add a column in the table with stdev in it
-	x[,stdev:=sd(get(val)), by=by]
-	y <- x[stdev != 0]
-	x[, stdev:=NULL]
-	y[, stdev:=NULL]
-	return(y)
-}
-
-removeNoMADMeasurements <- function(x, val='Value', by=c('MaskChannel','ImageChannel','Measurement','Expt'))
-{
-	# Tempororarily add a column in the table with stdev in it
-	x[,MAD:=mad(get(val), na.rm=TRUE), by=by]
-	toRemove <- unique(x[MAD == 0]$Measurement)
-	if(length(toRemove)>0)
-	{
-		print("Removing measurements with 0 MAD...")
-		for(m in toRemove)
-		{
-			print(m)
-		}
-		y <- x[!(Measurement %in% toRemove)]
-		x[, MAD:=NULL]
-		y[, MAD:=NULL]
-		return(y)
-	}else
-	{
-		x[, MAD:=NULL]
-		return(x)
-	}
-}
-
-# removeNoVarianceMeasurements <- function(x, val='Value', by=c('MaskChannel','ImageChannel','Measurement','Expt'))
-# {
-# 	# See if we have any columns to remove and record the info for reporting
-# 	temp <- x[,list(stdev=sd(get(val))), by=by]
-# 	temp <- data.frame(temp[stdev == 0])
-# 	print("Removing measurements with 0 variance...")
-# 	print(temp)
-# 	# Tempororarily add a column in the table with stdev in it
-# 	x[,stdev:=sd(get(val)), by=by]
-# 	y <- x[stdev != 0]
-# 	x[, stdev:=NULL]
-# 	y[, stdev:=NULL]
-# 	return(y)
-# }
-
 replaceSubStringInAllRowsOfCol <- function(x, old, new, col)
 {
 	x[,c(col):=gsub(old,new,get(col),fixed=TRUE)]
-}
-
-trySample <- function(x, n, replace=F, prob=NULL)
-{
-	if(n > length(x))
-	{
-		return(x)
-	}
-	else
-	{
-		return(sample(x, n, replace, prob))
-	}
 }
 
 fixLongTableStringsInCol <- function(x, col)
@@ -1092,21 +733,25 @@ splitColumnAtString <- function(x, colToSplit, newColNames, sep='.', keep=NULL)
      x[, (newColNames) := tstrsplit(get(colToSplit), sep, fixed=T, keep=keep)]
 }
 
+#' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelProducts <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboProducts, sep='_')
 {
      return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
+#' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelDifferences <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboDifferences, sep='_')
 {
      return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
+#' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelRatios <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboRatios, sep='_')
 {
      return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
+#' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelLogRatios <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboLogRatios, sep='_')
 {
      return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
@@ -1140,6 +785,19 @@ performChannelComboCalcs <- function(x, comboCol, valsToPermute, idCols, mCols=N
 	}
 }
 
+#' Example:
+#' 
+#' # Calculate Geometric Size Ratios
+#' ratioData <- calculateChannelLogRatios(x2, comboCol='MaskChannel', valsToPermute=c("1_Lower","1_Upper","3","4","5","6","Cyt","WholeCell"), idCols=c('cId','ImageChannel'), mCols='Geometric.SizeIterable.Total')
+#' x2 <- mergeComboData(x2, ratioData, mCol.old='Geometric.SizeIterable.Total', mCol.new='Geometric.SizeIterable.Total.Ratio')
+#' rm(ratioData)
+#' 
+#' # also
+#' diffs <- calculateChannelDifferences(x2, comboCol='MaskChannel', idCols=c('cId','ImageChannel'), mCols='Geometric.SizeIterable')
+#' x3 <- mergeComboData(x3, diffs, mCol.old='Geometric.SizeIterable', mCol.new='Geometric.SizeIterableDiff')
+#' rm(diffs)
+#' 
+#' The setnames is performed on the combodata just prior to merging with x
 mergeComboData <- function(x, comboData, mCol.old, mCol.new)
 {
      setnames(comboData, old=mCol.old, new=mCol.new)
@@ -1254,15 +912,389 @@ calculateGeometricFeaturesFromDNZernikeCircles <- function(x)
      }
 }
 
-normalizeColsToOtherCol <- function(x, numeratorCols, denominatorCol='Stats.Sum')
+##### JUNK YARD #####
+
+# getTableList <- function(dir, fileList, class, expt, sampleSize=NULL, cellIds=NULL)
+# {
+# 	if(!is.null(sampleSize))
+# 	{
+# 		subSampleSize <- sampleSize / length(fileList)
+# 	}
+# 	tableList <- list()
+# 	for(f in fileList)
+# 	{
+# 		print(paste0('Reading file: ', file.path(dir, f)))
+# 		temp <- fread(file.path(dir, f))
+# 		temp$Class <- class
+# 		temp$Expt <- expt
+# 		if('Z' %in% names(temp))
+# 		{
+# 			temp[,Z:=NULL]
+# 		}
+# 		if('A' %in% names(temp))
+# 		{
+# 			temp[,A:=NULL]
+# 		}
+# 		if('B' %in% names(temp))
+# 		{
+# 			temp[,B:=NULL]
+# 		}
+# 		if(!('ImRow' %in% names(temp)))
+# 		{
+# 			temp$ImRow <- 1
+# 		}
+# 		if(!('ImCol' %in% names(temp)))
+# 		{
+# 			temp$ImCol <- 1
+# 		}
+# 		if(!('Loc' %in% names(temp)))
+# 		{
+# 			temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
+# 		}
+# 		temp$file <- f
+# 		temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
+# 		temp[,ImRow:=NULL]
+# 		temp[,ImCol:=NULL]
+# 		if(!is.null(cellIds))
+# 		{
+# 		     rIds <- cellIds
+# 		     temp <- temp[cId %in% rIds]
+# 		}
+# 		if(!is.null(sampleSize))
+# 		{
+# 			rIds <- trySample(unique(temp$cId), subSampleSize)
+# 			temp <- temp[cId %in% rIds]
+# 		}
+# 		tableList <- append(tableList, list(temp))
+# 	}
+# 	return(tableList)
+# }
+# 
+# getTableList <- function(dir, featureTable, colocTable, class, expt, sampleSize=NULL, cellIds=NULL)
+# {
+#      if(!is.null(sampleSize))
+#      {
+#           subSampleSize <- sampleSize / length(fileList)
+#      }
+#      tableList <- list()
+#      for(f in fileList)
+#      {
+#           print(paste0('Reading file: ', file.path(dir, f)))
+#           temp <- fread(file.path(dir, f))
+#           temp$Class <- class
+#           temp$Expt <- expt
+#           if('Z' %in% names(temp))
+#           {
+#                temp[,Z:=NULL]
+#           }
+#           if('A' %in% names(temp))
+#           {
+#                temp[,A:=NULL]
+#           }
+#           if('B' %in% names(temp))
+#           {
+#                temp[,B:=NULL]
+#           }
+#           if(!('ImRow' %in% names(temp)))
+#           {
+#                temp$ImRow <- 1
+#           }
+#           if(!('ImCol' %in% names(temp)))
+#           {
+#                temp$ImCol <- 1
+#           }
+#           if(!('Loc' %in% names(temp)))
+#           {
+#                temp[,Loc:=getLocsFromRCs(ImRow, ImCol, max(ImRow) + 1)]
+#           }
+#           temp$file <- f
+#           temp$cId <- paste(temp$Expt, temp$file, temp$Loc, temp$Id, sep='.')
+#           temp[,ImRow:=NULL]
+#           temp[,ImCol:=NULL]
+#           if(!is.null(cellIds))
+#           {
+#                rIds <- cellIds
+#                temp <- temp[cId %in% rIds]
+#           }
+#           if(!is.null(sampleSize))
+#           {
+#                rIds <- trySample(unique(temp$cId), subSampleSize)
+#                temp <- temp[cId %in% rIds]
+#           }
+#           tableList <- append(tableList, list(temp))
+#      }
+#      return(tableList)
+# }
+
+# getXYCSVsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+# {
+# 	ret <- list()
+# 	fList <- list.files(path = dir, recursive = TRUE)
+# 	for(f in fList)
+# 	{
+# 		if((grepl('x', f) || grepl('y', f)) & grepl('.csv', f))
+# 		{
+# 			fileName <- strsplit(f, "\\.")[[1]][1]
+# 			ret[[fileName]] <- getXYCSVAsTable(dir, f, xName, xExpression, yName, yExpression)
+# 		}
+# 	}
+# 	retTable <- rbindlist(ret)
+# 	return(retTable)
+# }
+# 
+# getXYCSVAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+# {
+# 	fileName <- strsplit(file, "\\.")[[1]][1]
+# 	xy <- strsplit(fileName, "_")[[1]]
+# 	y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
+# 	x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
+# 	xVal <- eval(parse(text=xExpression))
+# 	yVal <- eval(parse(text=yExpression))
+# 	print(paste0('Reading ', file.path(dir,file), ' as ', xName, '=', xVal, ', ', yName, '=', yVal, '.'))
+# 	theTable <- fread(file.path(dir,file))
+# 	theTable[,(xName),with=FALSE] <- xVal
+# 	theTable[,(yName),with=FALSE] <- yVal
+# 	return(theTable)
+# }
+# 
+# getXYArffsAsTableFromDir <- function(dir, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+# {
+# 	ret <- list()
+# 	fList <- list.files(path = dir, recursive = TRUE)
+# 	for(f in fList)
+# 	{
+# 		if((grepl('x', f) || grepl('y', f)) & grepl('.arff', f))
+# 		{
+# 			fileName <- strsplit(f, "\\.")[[1]][1]
+# 			ret[[fileName]] <- getXYArffAsTable(dir, f, xName, xExpression, yName, yExpression)
+# 		}
+# 	}
+# 	retTable <- rbindlist(ret)
+# 	return(retTable)
+# }
+# 
+# getXYArffAsTable <- function(dir, file, xName='SNR', xExpression='(x+1)', yName='BLUR', yExpression='(y+1)*0.05')
+# {
+# 	fileName <- strsplit(file, "\\.")[[1]][1]
+# 	xy <- strsplit(fileName, "_")[[1]]
+# 	y <- as.numeric(substr(xy[1],2,nchar(xy[1])))
+# 	x <- as.numeric(substr(xy[2],2,nchar(xy[2])))
+# 	xVal <- eval(parse(text=xExpression))
+# 	yVal <- eval(parse(text=yExpression))
+# 	print(paste0('Reading ', file.path(dir,file), ' as ', xName, '=', xVal, ', ', yName, '=', yVal, '.'))
+# 	theTable <- read.arff(file.path(dir,file))
+# 	theTable[,xName] <- xVal
+# 	theTable[,yName] <- yVal
+# 	return(data.table(theTable))
+# }
+
+#' Depricated
+#' StandardizeWideData is preferred
+dep_standardizeLongData <- function(x, val.col='Value', by, ignoreMeasurementsContaining=c('ZernikePhase'))
 {
-     FUN <- function(a,b)
-     {
-          ret <- a/b
-          ret[!is.finite(ret)] <- NA
-          return(ret)
-     }
-     x[, c(numeratorCols):=lapply(.SD, FUN=FUN, get(denominatorCol)), .SDcols=numeratorCols][]
+	robustScale <- function(x, measurement, ignore)
+	{
+		if(any(sapply(ignore, grepl, measurement, fixed=T)))
+		{
+			return(x)
+		}
+		else
+		{
+			m <- median(x, na.rm=TRUE)
+			return((x-m)/mad(x, center=m, na.rm=TRUE))
+		}
+	}
+	x <- removeNoMADMeasurements(x, by=by)
+	x[,Value:=robustScale(get(val.col),Measurement,ignore=ignoreMeasurementsContaining),by=by]
+	return(x)
+}
+
+#' Depricated
+#' StandardizeWideData is preferred
+dep_standardizeLongData2 <- function(x, val.col='Value', by)
+{
+	robustScale <- function(x)
+	{
+		m <- median(x, na.rm=TRUE)
+		return((x-m)/mad(x, center=m, na.rm=TRUE))
+	}
+	x[,c(val.col):=robustScale(get(val.col)),by=by]
+	return(x)
+}
+
+#' Depricated
+#' removeNoVarianceCols preferred
+dep_removeNoVarianceMeasurements <- function(x, val='Value', by=c('MaskChannel','ImageChannel','Measurement','Expt'))
+{
+	# See if we have any columns to remove and record the info for reporting
+	temp <- x[,list(stdev=sd(get(val))), by=by]
+	temp <- data.frame(temp[stdev == 0])
+	print("Removing measurements with 0 variance...")
+	print(temp)
+	# Tempororarily add a column in the table with stdev in it
+	x[,stdev:=sd(get(val)), by=by]
+	y <- x[stdev != 0]
+	x[, stdev:=NULL]
+	y[, stdev:=NULL]
+	return(y)
+}
+
+#' Depricated
+#' removeNoVarianceCols preferred
+dep_removeNoMADMeasurements <- function(x, val='Value', by=c('MaskChannel','ImageChannel','Measurement','Expt'))
+{
+	# Tempororarily add a column in the table with stdev in it
+	x[,MAD:=mad(get(val), na.rm=TRUE), by=by]
+	toRemove <- unique(x[MAD == 0]$Measurement)
+	if(length(toRemove)>0)
+	{
+		print("Removing measurements with 0 MAD...")
+		for(m in toRemove)
+		{
+			print(m)
+		}
+		y <- x[!(Measurement %in% toRemove)]
+		x[, MAD:=NULL]
+		y[, MAD:=NULL]
+		return(y)
+	}else
+	{
+		x[, MAD:=NULL]
+		return(x)
+	}
+}
+
+#' Depricated
+#' readJEXData and readJEXDataTables
+dep_getTableListFromDB <- function(db, ds, x, y, objectName, isArff=F, storeFilePath=F, class=NULL, assignClass=T, expt=NULL, repl=NULL, sampleSize=NULL, colsToRemove = c(), cIdCols = c(), fsep='\\\\')
+{
+	tableList <- list()
+	
+	jData <- getData(db=db, ds=ds, x=x, y=y, type='File', name=objectName)
+	fileList <- jData$fileList
+	
+	if(!is.null(sampleSize))
+	{
+		subSampleSize <- sampleSize / length(fileList)
+	}
+	
+	# For each file in the fileList
+	for(f in fileList)
+	{
+		# Read the file in
+		print(paste0('Reading file: ', f))
+		
+		if(isArff)
+		{
+			library(foreign)
+			temp <- data.table(read.arff(f))
+		}
+		else
+		{
+			temp <- fread(f)
+		}
+		
+		# Store the filepath that was imported if desired
+		if(storeFilePath)
+		{
+			temp$File <- f	
+		}
+		
+		# Store the name/number of the experiment/replicate associated with this file
+		if(!is.null(expt))
+		{
+			temp$Expt <- expt
+		}
+		if(!is.null(replicate))
+		{
+			temp$Repl <- repl
+		}
+		
+		# Create/Assign a 'Class' column
+		if(!is.null(class) && assignClass)
+		{
+			temp$Class <- class
+		}
+		else if(!is.null(class) && !assignClass)
+		{
+			setnames(temp,class,'Class')
+			temp$Class <- as.character(temp$Class)
+		}
+		
+		# Create a column with a complex Id that will be completely unique for each sample
+		idColsFound <- cIdCols[cIdCols %in% names(temp)]
+		cat(names(temp))
+		if(length(idColsFound) == 0)
+		{
+			cat(names(temp))
+			stop('Must specify cIds for this function to enable sampling.')
+		}
+		if(length(idColsFound) != length(cIdCols))
+		{
+			warning(cat('The specified cIdCols (', cIdCols[!(cIdCols %in% names(temp))], 'is/are not column names of the table being retrieved... (', names(temp), ')'))
+		}
+		temp[,c('cId'):=paste(mapply(function(x){unique(as.character(x))}, mget(idColsFound)), collapse='.'), by=idColsFound]
+		
+		# put the complex Id first and the class column last
+		setcolorder(temp, c('cId', names(temp)[names(temp) != 'cId']))
+		
+		# Put the 'Class' column as the last column of the table
+		if('Class' %in% names(temp))
+		{
+			setcolorder(temp, c(names(temp)[names(temp) != 'Class'], 'Class'))
+		}
+		
+		# Remove specified columns from the data
+		for(tempCol in colsToRemove)
+		{
+			if(tempCol %in% names(temp))
+			{
+				temp[,c(tempCol) := NULL]
+			}
+			else
+			{
+				warning(paste(tempCol, 'is not a column of the data table so it cannot be removed'))
+			}
+		}
+		
+		# Grab the randomly sampled rows of the file
+		if(!is.null(sampleSize))
+		{
+			rIds <- trySample(unique(temp$cId), subSampleSize)
+			temp <- temp[cId %in% rIds]
+		}
+		
+		# Print the column names for a little feedback
+		print(names(temp))
+		
+		# Append this table to the list of tables provided.
+		tableList <- append(tableList, list(temp))
+	}
+	return(tableList)
+}
+
+#' Depricated
+#' use reorganize directly followed by call to sortColsByName(x)
+dep_getWideTable <- function(x)
+{
+	idCols <- getAllColNamesExcept(x, c('Value','Measurement'))
+	x <- reorganize(x, idCols)
+	x <- sortColsByName(x);
+	return(x)
+}
+
+#' Depricated
+#' Built into readJEXDataTables
+dep_trySample <- function(x, n, replace=F, prob=NULL)
+{
+	if(n > length(x))
+	{
+		return(x)
+	}
+	else
+	{
+		return(sample(x, n, replace, prob))
+	}
 }
 
 ##### Testing #####
