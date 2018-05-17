@@ -906,22 +906,19 @@ divideMAbyMBbyRef <- function(x, mA, mB)
 	return(x)
 }
 
+#' JEX outputs the normalized (size scale invariant) central moments already
+#' To make them intensity invariant, we just need to divide by the mean
+#' Not sure why we were normalizing by the total.
+#' Plus, the zernike's already give us a rotationally invariant measure and can be
+#' made to be contrast invariant by dividing by the mean
+#' so, tending to avoid use of these basic moments now since they are directional.
+#' If we want rotationally invariant, then we have Hu's.
 # intIntensityNormalizeCentralMoments <- function(x)
 # {
 # 	mNames <- getMeasurementNamesContaining(x, 'ImageMoments.CentralMoment')
 # 	for(mName in mNames)
 # 	{
 # 		x <- divideMAbyMBbyRef(x, mName, 'Stats.Sum')
-# 	}
-# 	return(x)
-# }
-
-# meanNormalizeZernikeMoments <- function(x)
-# {
-# 	mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
-# 	for(mName in mNames)
-# 	{
-# 		x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean')
 # 	}
 # 	return(x)
 # }
