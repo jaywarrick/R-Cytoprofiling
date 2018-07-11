@@ -332,7 +332,6 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
      rowsToDiscard <- allColsTrue(x, test=is.na, mCols=getAllColNamesExcept(x, c(idCols,'ImageChannel','MaskChannel')))
      x <- x[!rowsToDiscard]
-     
      # If there isn't one already, create a column that just has the MaskChannel information split from the subregion ids (i.e., p1, p2, ..., pn)
      if(!('MaskChannel2' %in% names(x)))
      {
@@ -394,6 +393,7 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      
      # Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
      # Also remove helper columns
+     
      if(removeXY)
      {
           x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
@@ -402,7 +402,6 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      {
           x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL)]
      }
-     
      
      # Remove all the duplicate information that was created during calculations
      x <- unique(x)
@@ -443,6 +442,7 @@ summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
 		lapply.data.table(x, FUN=logitTransform, cols=ampNames, in.place=T)
 		setnames(x, ampNames, paste0(ampNames, '.Logit'))
 	}
+	return(x)
 }
 
 standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, col.use.percentiles=F, percentiles=c(0.05,0.95), data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T, na.rm.no.variance.cols=F)
