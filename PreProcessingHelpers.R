@@ -679,15 +679,21 @@ getLongTableFromTemplate <- function(x, longTemplate)
 	return(getLongTable(x, idCols=getAllColNamesExcept(x, getAllColNamesExcept(longTemplate, c('Measurement','Value')))))
 }
 
-getMeasurementNamesContaining <- function(x, name)
+getMeasurementNamesContaining <- function(x, names)
 {
 	ms <- unique(x$Measurement)
-	return(ms[grepl(name,ms,fixed=T)])
+	ret <- character(0)
+	for(name in names)
+	{
+		ret <- c(ret, ms[grepl(name,ms,fixed=T)])
+	}
+	ret <- unique(ret)
+	return(ret)
 }
 
-removeMeasurementNamesContaining <- function(x, name)
+removeMeasurementNamesContaining <- function(x, names)
 {
-	namesToRemove <- getMeasurementNamesContaining(x, name)
+	namesToRemove <- getMeasurementNamesContaining(x, names)
 	return(removeMeasurementNames(x, namesToRemove))
 }
 
