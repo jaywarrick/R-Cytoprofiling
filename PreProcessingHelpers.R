@@ -162,9 +162,14 @@ removeColsMatching <- function(x, cols=NULL, col.test=function(n){all(!is.finite
   print(temp.names)
 }
 
-getColNamesContaining <- function(x, name)
+getColNamesContaining <- function(x, names)
 {
-     return(names(x)[grepl(name,names(x),fixed=TRUE)])
+	ret <- character(0)
+	for(name in names)
+	{
+		ret <- c(ret, names(x)[grepl(name,names(x),fixed=TRUE)])
+	}
+     return(unique(ret))
 }
 
 removeCols <- function(x, colsToRemove)
