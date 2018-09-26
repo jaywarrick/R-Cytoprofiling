@@ -497,7 +497,7 @@ robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c
      }
      else if(use.percentiles)
      {
-     	l(lo, hi) %=% getPercentileLimits(x[is.finite(x)], lower=percentiles[1], upper=percentiles[2])
+     	l(lo, hi) %=% getPercentileValues(x[is.finite(x)], c(percentiles[1],percentiles[2]))
           m <- mean(c(lo,hi))
      }
 	else
