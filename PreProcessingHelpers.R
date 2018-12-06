@@ -484,7 +484,7 @@ standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.me
           x[, rowNum:=NULL] # Remove the rowNum column
      }
 
-     x[,c(cols):=lapply(.SD, robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
+     x[,c(cols):=lapply(.SD, FUN=robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
      return(x)
 }
 
@@ -498,7 +498,8 @@ robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c
      else if(use.percentiles)
      {
      	l(lo, hi) %=% getPercentileValues(x[is.finite(x)], c(percentiles[1],percentiles[2]))
-          m <- mean(c(lo,hi))
+     	l(daMin, daMax) %=% qnorm(percentiles)
+          return(adjustIntensity(x, lo, hi, daMin, daMax))
      }
 	else
 	{
@@ -513,11 +514,6 @@ robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c
                sig <- sd(x[is.finite(x)], na.rm=TRUE)
           }
      }
-	else if(use.percentiles)
-	{
-		l(daMin, daMax) %=% qnorm(percentiles)
-		sig <- (hi-lo)/(daMax-daMin)
-	}
      else
      {
           sig <- sd(x[is.finite(x)], na.rm=TRUE)
