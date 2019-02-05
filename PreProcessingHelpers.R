@@ -162,9 +162,29 @@ removeColsMatching <- function(x, cols=NULL, col.test=function(n){all(!is.finite
   print(temp.names)
 }
 
-getColNamesContaining <- function(x, name)
+getColNamesContaining <- function(x, names, and=T)
 {
-     return(names(x)[grepl(name,names(x),fixed=TRUE)])
+	matchingCols <- rep(T, length(names(x)))
+	for(stringToMatch in names)
+	{
+		if(and)
+		{
+			matchingCols <- matchingCols & grepl(stringToMatch,names(x),fixed=TRUE)
+		}
+		else
+		{
+			matchingCols <- matchingCols | grepl(stringToMatch,names(x),fixed=TRUE)
+		}
+	}
+	matchingNames <- names(x)[matchingCols]
+	if(length(matchingCols) == 0)
+	{
+		print(paste0("Didn't find any matching columns!!!"))
+	}
+	else
+	{
+		return(matchingNames)
+	}
 }
 
 removeCols <- function(x, colsToRemove)
@@ -301,6 +321,8 @@ getPointStats <- function(x, y, weights)
 #' Takes a table with cId, ImageChannel, and MaskChannels (+ feature columns)
 #' Geometry.<X> features have values for sub-regions of the masks so each
 #' MaskChannel value has encoded the subregion number as well.
+#' 
+#' Note: The names must be 'fixed' as well using either 'fixColNames' or 'fixLongTableStringsInCol'
 #' 
 #' This function collapses the subregion data to just single values for each cell.
 #' 
@@ -439,7 +461,7 @@ summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
 	if(length(ampNames) > 0 & logit.trans)
 	{
 		# Use logit transform for amplitudes because from 0 to 1
-		lapply.data.table(x, FUN=logitTransform, cols=ampNames, in.place=T)
+		lapply.data.table(x, FUN=logit.transform, cols=ampNames, in.place=T)
 		setnames(x, ampNames, paste0(ampNames, '.Logit'))
 	}
 	return(x)
