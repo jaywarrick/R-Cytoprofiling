@@ -328,111 +328,120 @@ getPointStats <- function(x, y, weights)
 #' 
 summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
 {
-	idCols <- cellIdCols
-	
-	# If we haven't run this function before
-	if(!('Geometric.MaximumFeretsDiameter' %in% names(x)))
-	{
-		stop("It looks like you already ran this function on the table given it is missing columns that are deleted by this function. Aborting.")
-	}
-	
-	# Gather important columns for segregating the data for calculations
-	colsToSummarize <- getColNamesContaining(x, 'Geometric.')
-	colsToSummarize <- colsToSummarize[!(colsToSummarize %in% c('Geometric.COMX','Geometric.COMY','Geometric.MaximaX','Geometric.MaximaY'))]
-	colsToKeep <- getAllColNamesExcept(x, colsToSummarize)
-	
-	# Table to keep
-	tableToKeep <- x[, mget(colsToKeep)]
-	rowsToDiscard <- allColsTrue(tableToKeep, test=is.na, mCols=getAllColNamesExcept(tableToKeep, c(idCols,'ImageChannel','MaskChannel')))
-	tableToKeep <- tableToKeep[!rowsToDiscard]
-	if(any(grepl('.p', tableToKeep$MaskChannel, fixed=T)))
-	{
-		stop("There shouldn't be any .p nomenclature left over in the MaskChannel column at this step within the function. Check to see if all of the id columns were provided. Aborting.")
-	}
-	
-	# Table to summarize
-	x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
-	rowsToDiscard <- allColsTrue(x, test=is.na, mCols=getAllColNamesExcept(x, c(idCols,'ImageChannel','MaskChannel')))
-	x <- x[!rowsToDiscard]
-	# If there isn't one already, create a column that just has the MaskChannel information split from the subregion ids (i.e., p1, p2, ..., pn)
-	if(!('MaskChannel2' %in% names(x)))
-	{
-		splitColumnAtString(x, colToSplit='MaskChannel', sep='.p', newColNames=c('MaskChannel2'), keep=c(1L))
-	}
-	
-	# # Check to make sure that eventual remerging of the tables will be legitimate.
-	# uniqueKeep <- tableToKeep[, list(v=T), by=c('ImageChannel','MaskChannel2')]
-	# uniqueSummary <- x[, list(v=T), by=c('ImageChannel','MaskChannel2')]
-	# testTable <- rbindlist(list(uniqueKeep,uniqueSummary), use.names=T)
-	# testTable <- testTable[, list(v=T), by=c('ImageChannel','MaskChannel')]
-	# if((nrow(uniqueKeep) + nrow(uniqueSummary)) != nrow(testTable))
-	# {
-	#      stop("We use rbindlist to merge the tables later which assumes unique cId, 
-	#           ImageChannel, MaskChannel combinations for geometric data compared to 
-	#           other data. This doesn't appear to be true so throwing error and aborting. 
-	#           Need to use merge function for portions of the table that share cId, 
-	#           ImageChannel, MaskChannel combinations and rbindlist for unique ones.")
-	# }
-	
-	# Make columns with weights for each subregion
-	x[, ':='(weights=Geometric.SizeIterable/(sum(Geometric.SizeIterable, na.rm=T)), countWeights=Geometric.SizeIterable/(max(Geometric.SizeIterable, na.rm=T))), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-	
-	# Calculate ratios and remove the corresponding parent metrics
-	x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter, Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
-	removeCols(x, c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter', 'Geometric.MajorAxis', 'Geometric.MinorAxis', 'Geometric.MaximumFeretsAngle', 'Geometric.MinimumFeretsAngle'))
-	
-	# Remove subregion data where any Geometric feature measure is NA (typically small regions with no area etc.)
-	rowsToDiscard <- anyColsTrue(x, test=is.na, mColsContaining='Geometric.')
-	x <- x[!rowsToDiscard]
-	# Now we have only subregion data where the geometric information is fully defined
-	
-	# Decide how to combine different geometric features
-	#geomFeatures <- c('Convexity', 'Solidity', 'SizeIterable', 'BoundarySize', 'MainElongation', 'Circularity',
-	#'Boxivity', 'Eccentricity', 'MajorAxis', 'MaximumFeretsDiameter', 'MinimumFeretsDiameter',
-	#'MinorAxis', 'Roundness', 'X', 'Y')
-	geomFeatures_Total <- c('Geometric.SizeIterable', 'Geometric.BoundarySize')
-	geomFeatures_SizeWeightedMean <- c('Geometric.SizeIterable', 'Geometric.Convexity', 'Geometric.Solidity', 'Geometric.MainElongation', 'Geometric.Circularity', 'Geometric.Boxivity', 'Geometric.Eccentricity', 'Geometric.BoundarySize','Geometric.FeretsAspectRatio','Geometric.EllipseAspectRatio','Geometric.Roundness')
-	
-	# Aggregate geometry data from the different subregions (this created duplicate row information)
-	# all na.rm's are removed to cause errors if any NA's are found.
-	for(feature in geomFeatures_Total)
-	{
-		x[, (paste0(feature, '.Total')):=sum(get(feature)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-	}
-	for(feature in geomFeatures_SizeWeightedMean)
-	{
-		x[, (feature):=sum(get(feature)*weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-	}
-	
-	# Create new count columns (this also results in duplicate row information)
-	x[, ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-	
-	if(all(c('Geometric.X','Geometric.Y') %in% names(x)))
-	{
-		# Calculate point stats
-		x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-	}
-	
-	# Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
-	# Also remove helper columns
-	
-	if(removeXY)
-	{
-		x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
-	}
-	else
-	{
-		x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL)]
-	}
-	
-	# Remove all the duplicate information that was created during calculations
-	x <- unique(x)
-	
-	# Now merge tableToKeep and x
-	x <- merge(x=tableToKeep, y=x, by=c(idCols, 'MaskChannel', 'ImageChannel'), all=T)
-	
-	# Return the result
-	return(x)
+     idCols <- cellIdCols
+     
+     # If we haven't run this function before
+     if(!('Geometric.SizeIterable' %in% names(x)))
+     {
+          stop("It looks like you already ran this function on the table given it is missing columns that are deleted by this function. Aborting.")
+     }
+     
+     # Gather important columns for segregating the data for calculations
+     colsToSummarize <- getColNamesContaining(x, 'Geometric.')
+     colsToSummarize <- colsToSummarize[!(colsToSummarize %in% c('Geometric.COMX','Geometric.COMY','Geometric.MaximaX','Geometric.MaximaY'))]
+     colsToKeep <- getAllColNamesExcept(x, colsToSummarize)
+     
+     # Table to keep
+     tableToKeep <- x[, mget(colsToKeep)]
+     rowsToDiscard <- allColsTrue(tableToKeep, test=is.na, mCols=getAllColNamesExcept(tableToKeep, c(idCols,'ImageChannel','MaskChannel')))
+     tableToKeep <- tableToKeep[!rowsToDiscard]
+     if(any(grepl('.p', tableToKeep$MaskChannel, fixed=T)))
+     {
+     	stop("There shouldn't be any .p nomenclature left over in the MaskChannel column at this step within the function. Check to see if all of the id columns were provided. Aborting.")
+     }
+     
+     # Table to summarize
+     x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
+     rowsToDiscard <- allColsTrue(x, test=is.na, mCols=getAllColNamesExcept(x, c(idCols,'ImageChannel','MaskChannel')))
+     x <- x[!rowsToDiscard]
+     # If there isn't one already, create a column that just has the MaskChannel information split from the subregion ids (i.e., p1, p2, ..., pn)
+     if(!('MaskChannel2' %in% names(x)))
+     {
+          splitColumnAtString(x, colToSplit='MaskChannel', sep='.p', newColNames=c('MaskChannel2'), keep=c(1L))
+     }
+     
+     # # Check to make sure that eventual remerging of the tables will be legitimate.
+     # uniqueKeep <- tableToKeep[, list(v=T), by=c('ImageChannel','MaskChannel2')]
+     # uniqueSummary <- x[, list(v=T), by=c('ImageChannel','MaskChannel2')]
+     # testTable <- rbindlist(list(uniqueKeep,uniqueSummary), use.names=T)
+     # testTable <- testTable[, list(v=T), by=c('ImageChannel','MaskChannel')]
+     # if((nrow(uniqueKeep) + nrow(uniqueSummary)) != nrow(testTable))
+     # {
+     #      stop("We use rbindlist to merge the tables later which assumes unique cId, 
+     #           ImageChannel, MaskChannel combinations for geometric data compared to 
+     #           other data. This doesn't appear to be true so throwing error and aborting. 
+     #           Need to use merge function for portions of the table that share cId, 
+     #           ImageChannel, MaskChannel combinations and rbindlist for unique ones.")
+     # }
+     
+     # Make columns with weights for each subregion
+     x[, ':='(weights=Geometric.SizeIterable/(sum(Geometric.SizeIterable, na.rm=T)), countWeights=Geometric.SizeIterable/(max(Geometric.SizeIterable, na.rm=T))), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     
+     # Calculate ratios and remove the corresponding parent metrics
+     if(all(c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter') %in% names(x)))
+     {
+     	x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter)]
+     }
+     if(all(c('Geometric.MajorAxis', 'Geometric.MinorAxis') %in% names(x)))
+     {
+     	x[, ':='(Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
+     }
+     removeCols(x, c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter', 'Geometric.MajorAxis', 'Geometric.MinorAxis', 'Geometric.MaximumFeretsAngle', 'Geometric.MinimumFeretsAngle'))
+     
+     # Remove subregion data where any Geometric feature measure is NA (typically small regions with no area etc.)
+     rowsToDiscard <- anyColsTrue(x, test=is.na, mColsContaining='Geometric.')
+     x <- x[!rowsToDiscard]
+     # Now we have only subregion data where the geometric information is fully defined
+     
+     # Decide how to combine different geometric features
+     #geomFeatures <- c('Convexity', 'Solidity', 'SizeIterable', 'BoundarySize', 'MainElongation', 'Circularity',
+     #'Boxivity', 'Eccentricity', 'MajorAxis', 'MaximumFeretsDiameter', 'MinimumFeretsDiameter',
+     #'MinorAxis', 'Roundness', 'X', 'Y')
+     geomFeatures_Total <- c('Geometric.SizeIterable', 'Geometric.BoundarySize')
+     geomFeatures_Total <- geomFeatures_Total[geomFeatures_Total %in% names(x)]
+     geomFeatures_SizeWeightedMean <- c('Geometric.SizeIterable', 'Geometric.Convexity', 'Geometric.Solidity', 'Geometric.MainElongation', 'Geometric.Circularity', 'Geometric.Boxivity', 'Geometric.Eccentricity', 'Geometric.BoundarySize','Geometric.FeretsAspectRatio','Geometric.EllipseAspectRatio','Geometric.Roundness')
+     geomFeatures_SizeWeightedMean <- geomFeatures_SizeWeightedMean[geomFeatures_SizeWeightedMean %in% names(x)]
+     
+     # Aggregate geometry data from the different subregions (this created duplicate row information)
+     # all na.rm's are removed to cause errors if any NA's are found.
+     for(feature in geomFeatures_Total)
+     {
+          x[, (paste0(feature, '.Total')):=sum(get(feature)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     }
+     for(feature in geomFeatures_SizeWeightedMean)
+     {
+          x[, (feature):=sum(get(feature)*weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     }
+     
+     # Create new count columns (this also results in duplicate row information)
+     x[, ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     
+     if(all(c('Geometric.X','Geometric.Y') %in% names(x)))
+     {
+       # Calculate point stats
+       x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+     }
+     
+     # Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
+     # Also remove helper columns
+     
+     if(removeXY)
+     {
+          x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
+     }
+     else
+     {
+          x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL)]
+     }
+     
+     # Remove all the duplicate information that was created during calculations
+     x <- unique(x)
+     
+     # Now merge tableToKeep and x
+     x <- merge(x=tableToKeep, y=x, by=c(idCols, 'MaskChannel', 'ImageChannel'), all=T)
+     
+     # Return the result
+     return(x)
 }
 
 summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
