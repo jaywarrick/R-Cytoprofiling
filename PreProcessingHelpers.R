@@ -331,7 +331,7 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      idCols <- cellIdCols
      
      # If we haven't run this function before
-     if(!('Geometric.MaximumFeretsDiameter' %in% names(x)))
+     if(!('Geometric.SizeIterable' %in% names(x)))
      {
           stop("It looks like you already ran this function on the table given it is missing columns that are deleted by this function. Aborting.")
      }
@@ -378,7 +378,14 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      x[, ':='(weights=Geometric.SizeIterable/(sum(Geometric.SizeIterable, na.rm=T)), countWeights=Geometric.SizeIterable/(max(Geometric.SizeIterable, na.rm=T))), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
      
      # Calculate ratios and remove the corresponding parent metrics
-     x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter, Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
+     if(all(c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter') %in% names(x)))
+     {
+     	x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter)]
+     }
+     if(all(c('Geometric.MajorAxis', 'Geometric.MinorAxis') %in% names(x)))
+     {
+     	x[, ':='(Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
+     }
      removeCols(x, c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter', 'Geometric.MajorAxis', 'Geometric.MinorAxis', 'Geometric.MaximumFeretsAngle', 'Geometric.MinimumFeretsAngle'))
      
      # Remove subregion data where any Geometric feature measure is NA (typically small regions with no area etc.)
@@ -391,7 +398,9 @@ summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
      #'Boxivity', 'Eccentricity', 'MajorAxis', 'MaximumFeretsDiameter', 'MinimumFeretsDiameter',
      #'MinorAxis', 'Roundness', 'X', 'Y')
      geomFeatures_Total <- c('Geometric.SizeIterable', 'Geometric.BoundarySize')
+     geomFeatures_Total <- geomFeatures_Total[geomFeatures_Total %in% names(x)]
      geomFeatures_SizeWeightedMean <- c('Geometric.SizeIterable', 'Geometric.Convexity', 'Geometric.Solidity', 'Geometric.MainElongation', 'Geometric.Circularity', 'Geometric.Boxivity', 'Geometric.Eccentricity', 'Geometric.BoundarySize','Geometric.FeretsAspectRatio','Geometric.EllipseAspectRatio','Geometric.Roundness')
+     geomFeatures_SizeWeightedMean <- geomFeatures_SizeWeightedMean[geomFeatures_SizeWeightedMean %in% names(x)]
      
      # Aggregate geometry data from the different subregions (this created duplicate row information)
      # all na.rm's are removed to cause errors if any NA's are found.
