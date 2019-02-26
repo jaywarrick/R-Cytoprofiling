@@ -1760,7 +1760,7 @@ normalizeNuc <- function(x,
 	data.table.plot.all(x[Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
 }
 
-makeDrugSensitivityHistograms <- function(x, makePhase=T, makeNuc=T, makeDeath=T, save.dir)
+makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, makePhase=T, makeNuc=T, makeDeath=T, save.dir)
 {
 	dir.create(file.path(save.dir, 'MovieFrames'), showWarnings=F, recursive = T)
 	dir.create(file.path(save.dir, 'Movies'), showWarnings=F, recursive = T)
@@ -1810,10 +1810,7 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 	makeComplexId(labs, c('Tx'))
 	labs$cols <- (loopingPastels(1:length(labs$cId), a=1, max.k=length(labs$cId)))
 	.use.lightFont()
-	if(save.plot)
-	{
-		png(file.path(save.dir, save.file), res=300, units='in', width=5, height=5)
-	}
+	
 	if(flip)
 	{
 		daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
@@ -1830,13 +1827,22 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 					   size = 2.5,
 					   hjust=0)+
 		guides(colour = guide_legend(nrow = (length(Txs) %/% 4) + 1))
-	print(daPlot)
-	stats <- pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)
+	stats <- as.data.table(pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)$p.value, keep.rownames=T)
+	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
+	ss <- tableGrob(stats.sym)
 	if(save.plot)
 	{
+		fwrite(stats, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - pvalues.csv')))
+		png(file.path(save.dir, save.file), res=300, units='in', width=5, height=6)
+		print(daPlot)
 		dev.off()
 	}
-	return(stats)
+	else
+	{
+		print(daPlot)
+		print(stats)
+	}
+	return(list(stats=stats, stats.sym=stats.sym, daTable=ss, daPlot=daPlot))
 }
 
 ##### Testing #####
