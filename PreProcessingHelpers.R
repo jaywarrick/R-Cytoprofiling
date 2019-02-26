@@ -1609,12 +1609,40 @@ calculateDrugSensitivityMetrics <- function(x,
 								    gap.max = 2,
 								    initialCellsOnly = T,
 								    P.string = '.P',
-								    Neg.string = '.Neg')
+								    Neg.string = '.Neg',
+								    oldTxs=NULL,
+								    newTxs=NULL)
 {
 	library(data.table)
 	library(bit64)
 	library(MASS)
 	library(zoo)
+	
+	if(length(oldTxs) != length(newTxs))
+	{
+		stop('Old and new treatement names need to be vectors of the same length. Aborting.')
+	}
+	
+	if(length(oldTxs > 0))
+	{
+		if(!all(oldTxs %in% unique(x$Tx)))
+		{
+			warning(paste0('Some of the old Tx names do not exist in the table (', paste(oldTxs[!(oldTxs %in% unique(x$Tx))], collapse=',')))
+		}
+	}
+	
+	x3 <- copy(x)
+	
+	if(length(oldTxs) > 0)
+	{
+		for(i in 1:length(oldTxs))
+		{
+			if(oldTxs[i] %in% unique(x3$Tx))
+			{
+				x3[Tx==oldTxs[i], Tx:=newTxs[i]]
+			}
+		}
+	}
 	
 	# Make Time real
 	x3[, Time:= 0.5 + (Time-1)*0.5]
@@ -1715,21 +1743,100 @@ getEventRecoveryStatus <- function(time, LD, n.true=3, suffix='')
 
 normalizePhase <- function(x)
 {
-	peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=c(3.1,4.5), main=copy(.BY[[1]]))), by='Tx']
-	data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], xlim=c(3.1,4.5), ylim=c(0,3), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), alpha=0.4, main='Phase Normalization')
+	peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
+	data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
 	x[, Phase.norm:=10*(Phase/peaks[peaks$Tx==.BY[[1]]]$peak.x-1), by=c('Tx')]
-	data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, add=T)
+	data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
 }
 
 # Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
 normalizeNuc <- function(x,
 					nuc.lo,
 					nuc.hi,
-					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){length(blah)==0}))
+					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}))
 {
-	data.table.plot.all(x[Tx=='to.plot'], sample.size=5000, xcol='Nuc', xlim=c(-3,4), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), main='Nuc Standardization')
-	standardizeWideData(x, suffix='.norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
-	data.table.plot.all(x[Tx=='to.plot'], sample.size=5000, xlim=c(-3,4), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), add=T)
+	data.table.plot.all(x[Tx==to.plot], sample.size=5000, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
+	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
+	data.table.plot.all(x[Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+}
+
+makeDrugSensitivityHistograms <- function(x, makePhase=T, makeNuc=T, makeDeath=T, save.dir)
+{
+	dir.create(file.path(save.dir, 'MovieFrames'), showWarnings=F, recursive = T)
+	dir.create(file.path(save.dir, 'Movies'), showWarnings=F, recursive = T)
+	x[, Tx:=factor(Tx, levels=uniqueo(Tx))]
+	setkey(x, Tx)
+	.use.lightFont()
+	if(makePhase)
+	{
+		data.table.plot.all(x, xcol='Phase.norm', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir, 'MovieFrames/PhaseDist_'), v=PhaseThresh, plot.by='Period.1', xlim=c(-3,1), density.args=list(draw.area=F, lwd=2))#, xlim=c(-2.5,2.5))
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseDist_%d.png', out.filename = 'Movies/Phase Histograms.mp4', frame.rate = 2)
+	}
+	if(makeNuc)
+	{
+		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,3), density.args=list(draw.area=F, lwd=2))
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = 'Movies/Nuc Histograms.mp4', frame.rate = 2)	
+	}
+	if(makeDeath)
+	{
+		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-1,1.3), density.args=list(draw.area=F, lwd=2))
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = 'Movies/Death Histograms.mp4', frame.rate = 2)
+	}
+}
+
+plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir)
+{
+	if(is.null(Txs))
+	{
+		Txs <- uniqueo(x$Tx)
+	}
+	
+	pval.coord = c(0, ylim[2]*pval.y)
+	
+	temp <- x.surv[!(LD.time==min(LD.time) & LD.status==1)]
+	temp <- temp[Tx %in% Txs]
+	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Phase.norm >= PhaseThresh)), by=c('Tx','Time')]
+	inits <- inits[, list(L=median(L)), by='Tx']
+	initialCounts <- x[Time == Time[1], list(N=.N), by=c('Tx','Time')]
+	initialCounts <- initialCounts[, list(N=median(N)), by=c('Tx')]
+	inits <- merge(inits, initialCounts, by='Tx')
+	inits[, init.viability:=round(100*L/N, 0)]
+	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
+	inits[, txt2:=paste(txt,'%', sep='')]
+	temp[, Tx:=factor(Tx, levels=Txs)]
+	setkey(temp, Tx)
+	fit <- survfit(Surv(LD.time, LD.status) ~ Tx, data = temp)
+	labs <- getUniqueCombos(temp, c('Tx'))
+	makeComplexId(labs, c('Tx'))
+	labs$cols <- (loopingPastels(1:length(labs$cId), a=1, max.k=length(labs$cId)))
+	.use.lightFont()
+	if(save.plot)
+	{
+		png(file.path(save.dir, save.file), res=300, units='in', width=5, height=5)
+	}
+	if(flip)
+	{
+		daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+	}
+	else
+	{
+		daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+	}
+	
+	daPlot$plot <- daPlot$plot+ 
+		ggplot2::annotate("text", 
+					   x = min(x$Time), y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
+					   label = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
+					   size = 2.5,
+					   hjust=0)+
+		guides(colour = guide_legend(nrow = (length(Txs) %/% 4) + 1))
+	print(daPlot)
+	stats <- pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)
+	if(save.plot)
+	{
+		dev.off()
+	}
+	return(stats)
 }
 
 ##### Testing #####
