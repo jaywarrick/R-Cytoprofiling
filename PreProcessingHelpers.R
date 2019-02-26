@@ -7,11 +7,11 @@ library(shotGroups)
 
 sourceGitHubFile <- function(user, repo, branch, file)
 {
-     require(curl)
-     destfile <- tempfile()
-     fileToGet <- paste0("https://raw.githubusercontent.com/", user, "/", repo, "/", branch, "/", file)
-     curl_download(url=fileToGet, destfile)
-     source(destfile)
+	require(curl)
+	destfile <- tempfile()
+	fileToGet <- paste0("https://raw.githubusercontent.com/", user, "/", repo, "/", branch, "/", file)
+	curl_download(url=fileToGet, destfile)
+	source(destfile)
 }
 
 ##### Visualization #####
@@ -27,7 +27,7 @@ browseShinyData <- function()
 
 resample <- function(x, ...)
 {
-     x[sample.int(length(x), ...)]
+	x[sample.int(length(x), ...)]
 }
 
 getLocsFromRCs <- function(r, c, numRows)
@@ -96,55 +96,55 @@ divideColAByColB <- function(x, colA, colB)
 #' 
 summarizeRows <- function(x, col.fun=NULL, row.fun, ret.init=NULL, mCols=NULL, mColsContaining=NULL, mColFilter=NULL)
 {
-     if(is.null(mCols))
-     {
-          if(!is.null(mColsContaining))
-          {
-               mCols <- getColNamesContaining(x, mColsContaining)
-          }
-          else if(!is.null(mColFilter))
-          {
-               mCols <- as.logical(lapply(x, mColFilter))
-               mCols <- names(x)[mCols]
-          }
-          else
-          {
-               mCols <- names(x)
-          }
-     }
-     
-     # Apply the col.fun
-     y <- lapply.data.table(x, FUN=col.fun, cols=mCols, in.place=F)
-     
-     n <- seq_along(mCols)
-     for(i in n)
-     {
-          ret.init <- row.fun(y[[mCols[i]]], ret.init)
-     }
-     return(ret.init)
+	if(is.null(mCols))
+	{
+		if(!is.null(mColsContaining))
+		{
+			mCols <- getColNamesContaining(x, mColsContaining)
+		}
+		else if(!is.null(mColFilter))
+		{
+			mCols <- as.logical(lapply(x, mColFilter))
+			mCols <- names(x)[mCols]
+		}
+		else
+		{
+			mCols <- names(x)
+		}
+	}
+	
+	# Apply the col.fun
+	y <- lapply.data.table(x, FUN=col.fun, cols=mCols, in.place=F)
+	
+	n <- seq_along(mCols)
+	for(i in n)
+	{
+		ret.init <- row.fun(y[[mCols[i]]], ret.init)
+	}
+	return(ret.init)
 }
 
 allColsTrue <- function(x, test, mCols=NULL, mColsContaining=NULL, mColFilter=NULL)
 {
-     ret <- summarizeRows(x, col.fun=test, row.fun=function(a, ret){a & ret}, ret.init=rep(T, nrow(x)), mCols=mCols, mColsContaining=mColsContaining, mColFilter=mColFilter)
-     return(ret)
+	ret <- summarizeRows(x, col.fun=test, row.fun=function(a, ret){a & ret}, ret.init=rep(T, nrow(x)), mCols=mCols, mColsContaining=mColsContaining, mColFilter=mColFilter)
+	return(ret)
 }
 
 anyColsTrue <- function(x, test, mCols=NULL, mColsContaining=NULL, mColFilter=NULL)
 {
-     ret <- summarizeRows(x, col.fun=test, row.fun=function(a, ret){a | ret}, ret.init=rep(F, nrow(x)), mCols=mCols, mColsContaining=mColsContaining, mColFilter=mColFilter)
-     return(ret)
+	ret <- summarizeRows(x, col.fun=test, row.fun=function(a, ret){a | ret}, ret.init=rep(F, nrow(x)), mCols=mCols, mColsContaining=mColsContaining, mColFilter=mColFilter)
+	return(ret)
 }
 
 numColsTrue <- function(x, test, mCols=NULL, mColsContaining=NULL, mColFilter=NULL)
 {
-     ret <- summarizeRows(x, col.fun=test, row.fun=function(a, ret){ret + a}, ret.init=rep(0, nrow(x)), mCols=mCols, mColsContaining=mColsContaining, mColFilter=mColFilter)
-     return(ret)
+	ret <- summarizeRows(x, col.fun=test, row.fun=function(a, ret){ret + a}, ret.init=rep(0, nrow(x)), mCols=mCols, mColsContaining=mColsContaining, mColFilter=mColFilter)
+	return(ret)
 }
 
 removeColsWithAnyNonFiniteVals <- function(x, cols=NULL)
 {
-  removeColsMatching(x, cols=cols, col.test=function(n){any(!is.finite(n))})
+	removeColsMatching(x, cols=cols, col.test=function(n){any(!is.finite(n))})
 }
 
 removeColsWithAllNonFiniteVals <- function(x, cols=NULL)
@@ -154,12 +154,12 @@ removeColsWithAllNonFiniteVals <- function(x, cols=NULL)
 
 removeColsMatching <- function(x, cols=NULL, col.test=function(n){all(!is.finite(n))}, ...)
 {
-  # Remove rows and columns of data contining non-finite data (typically inverses etc.)
-  temp.names <- copy(names(x))
-  lapply.data.table(x, FUN=function(a){if(col.test(a, ...)){return(NULL)}else{return(a)}}, cols=cols, in.place=T)
-  print('Removed the following columns.')
-  temp.names <- temp.names[!(temp.names %in% names(x))]
-  print(temp.names)
+	# Remove rows and columns of data contining non-finite data (typically inverses etc.)
+	temp.names <- copy(names(x))
+	lapply.data.table(x, FUN=function(a){if(col.test(a, ...)){return(NULL)}else{return(a)}}, cols=cols, in.place=T)
+	print('Removed the following columns.')
+	temp.names <- temp.names[!(temp.names %in% names(x))]
+	print(temp.names)
 }
 
 getColNamesContaining <- function(x, names, and=T)
@@ -190,47 +190,47 @@ getColNamesContaining <- function(x, names, and=T)
 removeCols <- function(x, colsToRemove)
 {
 	
-     colsToRemove <- colsToRemove[colsToRemove %in% names(x)]
-     if(length(colsToRemove) == 0)
-     {
-          print(paste0("Didn't find any columns to remove."))
-     }
-     else
-     {
-          print(paste0("Removing columns"))
-          for(colToRemove in colsToRemove)
-          {
-               print(colToRemove)
-               x[,(colToRemove):=NULL]
-          }
-     }
+	colsToRemove <- colsToRemove[colsToRemove %in% names(x)]
+	if(length(colsToRemove) == 0)
+	{
+		print(paste0("Didn't find any columns to remove."))
+	}
+	else
+	{
+		print(paste0("Removing columns"))
+		for(colToRemove in colsToRemove)
+		{
+			print(colToRemove)
+			x[,(colToRemove):=NULL]
+		}
+	}
 	return(x)
 }
 
 removeColsContaining <- function(x, stringsToMatch)
 {
 	print(paste0("Removing colums with names containing..."))
-     colsToRemove <- c()
+	colsToRemove <- c()
 	for(stringToMatch in stringsToMatch)
 	{
 		print(stringToMatch)
 		colsToRemove <- c(colsToRemove, getColNamesContaining(x, stringToMatch))
 	}
-     colsToRemove <- unique(colsToRemove[colsToRemove %in% names(x)])
-     if(length(colsToRemove) == 0)
-     {
-          print(paste0("Didn't find any columns to remove."))
-     }
-     else
-     {
-          print(paste0(""))
-          print(paste0("Removing colums..."))
-          for(colToRemove in colsToRemove)
-          {
-               print(colToRemove)
-               x[,(colToRemove):=NULL]
-          }
-     }
+	colsToRemove <- unique(colsToRemove[colsToRemove %in% names(x)])
+	if(length(colsToRemove) == 0)
+	{
+		print(paste0("Didn't find any columns to remove."))
+	}
+	else
+	{
+		print(paste0(""))
+		print(paste0("Removing colums..."))
+		for(colToRemove in colsToRemove)
+		{
+			print(colToRemove)
+			x[,(colToRemove):=NULL]
+		}
+	}
 	return(x)
 }
 
@@ -252,21 +252,21 @@ getAllColNamesExcept <- function(x, names)
 
 getNumericCols <- function(x)
 {
-     return(names(x)[unlist(x[,lapply(.SD, is.numeric)])])
+	return(names(x)[unlist(x[,lapply(.SD, is.numeric)])])
 }
 
 getNumericColsOfInterest <- function(x, data.cols=NULL, data.cols.contains=NULL)
 {
-     ret <- getNumericCols(x)
-     if(!is.null(data.cols))
-     {
-          ret <- intersect(data.cols, ret)
-     }
-     else if(is.null(data.cols) & !is.null(data.cols.contains))
-     {
-          ret <- intersect(getColNamesContaining(x, data.cols.contains), ret)
-     }
-     return(ret)
+	ret <- getNumericCols(x)
+	if(!is.null(data.cols))
+	{
+		ret <- intersect(data.cols, ret)
+	}
+	else if(is.null(data.cols) & !is.null(data.cols.contains))
+	{
+		ret <- intersect(getColNamesContaining(x, data.cols.contains), ret)
+	}
+	return(ret)
 }
 
 getNonNumericCols <- function(x)
@@ -290,32 +290,32 @@ sortColsByName <- function(x)
 # Function for calculating point stats in data.table call.
 getPointStats <- function(x, y, weights)
 {
-     require(spatstat)
-     if(length(x) > 1)
-     {
-          pts <- matrix(c(x, y), ncol=2)
-          circ <- getMinCircle(pts)
-     }
-     else if(length(x) == 1)
-     {
-          circ <- list(rad=1L, ctr=c(x,y))
-     }
-     else
-     {
-          return(lapply(list(Intensity=NA, WeightedIntensity=NA, ConvexArea=NA, ConvexPerimeter=NA), as.double))
-     }
-     pp <- ppp(x, y, window=disc(radius=circ$rad*1.01, centre=circ$ctr))
-     hull <- convexhull(pp)
-     ret <- lapply(list(Intensity=intensity(pp), WeightedIntensity=intensity(pp, weights=weights), ConvexArea=area.owin(hull), ConvexPerimeter=perimeter(hull), Diameter=circ$rad), as.double)
-     if(ret$ConvexArea == 0 || ret$ConvexPerimeter == 0)
-     {
-          ret$Circularity <- 0
-     }
-     else
-     {
-          ret$Circularity <- as.double(4*pi*ret$ConvexArea/(ret$ConvexPerimeter*ret$ConvexPerimeter))
-     }
-     return(ret)
+	require(spatstat)
+	if(length(x) > 1)
+	{
+		pts <- matrix(c(x, y), ncol=2)
+		circ <- getMinCircle(pts)
+	}
+	else if(length(x) == 1)
+	{
+		circ <- list(rad=1L, ctr=c(x,y))
+	}
+	else
+	{
+		return(lapply(list(Intensity=NA, WeightedIntensity=NA, ConvexArea=NA, ConvexPerimeter=NA), as.double))
+	}
+	pp <- ppp(x, y, window=disc(radius=circ$rad*1.01, centre=circ$ctr))
+	hull <- convexhull(pp)
+	ret <- lapply(list(Intensity=intensity(pp), WeightedIntensity=intensity(pp, weights=weights), ConvexArea=area.owin(hull), ConvexPerimeter=perimeter(hull), Diameter=circ$rad), as.double)
+	if(ret$ConvexArea == 0 || ret$ConvexPerimeter == 0)
+	{
+		ret$Circularity <- 0
+	}
+	else
+	{
+		ret$Circularity <- as.double(4*pi*ret$ConvexArea/(ret$ConvexPerimeter*ret$ConvexPerimeter))
+	}
+	return(ret)
 }
 
 #' Takes a table with cId, ImageChannel, and MaskChannels (+ feature columns)
@@ -328,111 +328,111 @@ getPointStats <- function(x, y, weights)
 #' 
 summarizeGeometry <- function(x, cellIdCols='cId', removeXY=T)
 {
-     idCols <- cellIdCols
-     
-     # If we haven't run this function before
-     if(!('Geometric.MaximumFeretsDiameter' %in% names(x)))
-     {
-          stop("It looks like you already ran this function on the table given it is missing columns that are deleted by this function. Aborting.")
-     }
-     
-     # Gather important columns for segregating the data for calculations
-     colsToSummarize <- getColNamesContaining(x, 'Geometric.')
-     colsToSummarize <- colsToSummarize[!(colsToSummarize %in% c('Geometric.COMX','Geometric.COMY','Geometric.MaximaX','Geometric.MaximaY'))]
-     colsToKeep <- getAllColNamesExcept(x, colsToSummarize)
-     
-     # Table to keep
-     tableToKeep <- x[, mget(colsToKeep)]
-     rowsToDiscard <- allColsTrue(tableToKeep, test=is.na, mCols=getAllColNamesExcept(tableToKeep, c(idCols,'ImageChannel','MaskChannel')))
-     tableToKeep <- tableToKeep[!rowsToDiscard]
-     if(any(grepl('.p', tableToKeep$MaskChannel, fixed=T)))
-     {
-     	stop("There shouldn't be any .p nomenclature left over in the MaskChannel column at this step within the function. Check to see if all of the id columns were provided. Aborting.")
-     }
-     
-     # Table to summarize
-     x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
-     rowsToDiscard <- allColsTrue(x, test=is.na, mCols=getAllColNamesExcept(x, c(idCols,'ImageChannel','MaskChannel')))
-     x <- x[!rowsToDiscard]
-     # If there isn't one already, create a column that just has the MaskChannel information split from the subregion ids (i.e., p1, p2, ..., pn)
-     if(!('MaskChannel2' %in% names(x)))
-     {
-          splitColumnAtString(x, colToSplit='MaskChannel', sep='.p', newColNames=c('MaskChannel2'), keep=c(1L))
-     }
-     
-     # # Check to make sure that eventual remerging of the tables will be legitimate.
-     # uniqueKeep <- tableToKeep[, list(v=T), by=c('ImageChannel','MaskChannel2')]
-     # uniqueSummary <- x[, list(v=T), by=c('ImageChannel','MaskChannel2')]
-     # testTable <- rbindlist(list(uniqueKeep,uniqueSummary), use.names=T)
-     # testTable <- testTable[, list(v=T), by=c('ImageChannel','MaskChannel')]
-     # if((nrow(uniqueKeep) + nrow(uniqueSummary)) != nrow(testTable))
-     # {
-     #      stop("We use rbindlist to merge the tables later which assumes unique cId, 
-     #           ImageChannel, MaskChannel combinations for geometric data compared to 
-     #           other data. This doesn't appear to be true so throwing error and aborting. 
-     #           Need to use merge function for portions of the table that share cId, 
-     #           ImageChannel, MaskChannel combinations and rbindlist for unique ones.")
-     # }
-     
-     # Make columns with weights for each subregion
-     x[, ':='(weights=Geometric.SizeIterable/(sum(Geometric.SizeIterable, na.rm=T)), countWeights=Geometric.SizeIterable/(max(Geometric.SizeIterable, na.rm=T))), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-     
-     # Calculate ratios and remove the corresponding parent metrics
-     x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter, Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
-     removeCols(x, c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter', 'Geometric.MajorAxis', 'Geometric.MinorAxis', 'Geometric.MaximumFeretsAngle', 'Geometric.MinimumFeretsAngle'))
-     
-     # Remove subregion data where any Geometric feature measure is NA (typically small regions with no area etc.)
-     rowsToDiscard <- anyColsTrue(x, test=is.na, mColsContaining='Geometric.')
-     x <- x[!rowsToDiscard]
-     # Now we have only subregion data where the geometric information is fully defined
-     
-     # Decide how to combine different geometric features
-     #geomFeatures <- c('Convexity', 'Solidity', 'SizeIterable', 'BoundarySize', 'MainElongation', 'Circularity',
-     #'Boxivity', 'Eccentricity', 'MajorAxis', 'MaximumFeretsDiameter', 'MinimumFeretsDiameter',
-     #'MinorAxis', 'Roundness', 'X', 'Y')
-     geomFeatures_Total <- c('Geometric.SizeIterable', 'Geometric.BoundarySize')
-     geomFeatures_SizeWeightedMean <- c('Geometric.SizeIterable', 'Geometric.Convexity', 'Geometric.Solidity', 'Geometric.MainElongation', 'Geometric.Circularity', 'Geometric.Boxivity', 'Geometric.Eccentricity', 'Geometric.BoundarySize','Geometric.FeretsAspectRatio','Geometric.EllipseAspectRatio','Geometric.Roundness')
-     
-     # Aggregate geometry data from the different subregions (this created duplicate row information)
-     # all na.rm's are removed to cause errors if any NA's are found.
-     for(feature in geomFeatures_Total)
-     {
-          x[, (paste0(feature, '.Total')):=sum(get(feature)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-     }
-     for(feature in geomFeatures_SizeWeightedMean)
-     {
-          x[, (feature):=sum(get(feature)*weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-     }
-     
-     # Create new count columns (this also results in duplicate row information)
-     x[, ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-     
-     if(all(c('Geometric.X','Geometric.Y') %in% names(x)))
-     {
-       # Calculate point stats
-       x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
-     }
-     
-     # Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
-     # Also remove helper columns
-     
-     if(removeXY)
-     {
-          x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
-     }
-     else
-     {
-          x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL)]
-     }
-     
-     # Remove all the duplicate information that was created during calculations
-     x <- unique(x)
-     
-     # Now merge tableToKeep and x
-     x <- merge(x=tableToKeep, y=x, by=c(idCols, 'MaskChannel', 'ImageChannel'), all=T)
-     
-     # Return the result
-     return(x)
+	idCols <- cellIdCols
+	
+	# If we haven't run this function before
+	if(!('Geometric.MaximumFeretsDiameter' %in% names(x)))
+	{
+		stop("It looks like you already ran this function on the table given it is missing columns that are deleted by this function. Aborting.")
+	}
+	
+	# Gather important columns for segregating the data for calculations
+	colsToSummarize <- getColNamesContaining(x, 'Geometric.')
+	colsToSummarize <- colsToSummarize[!(colsToSummarize %in% c('Geometric.COMX','Geometric.COMY','Geometric.MaximaX','Geometric.MaximaY'))]
+	colsToKeep <- getAllColNamesExcept(x, colsToSummarize)
+	
+	# Table to keep
+	tableToKeep <- x[, mget(colsToKeep)]
+	rowsToDiscard <- allColsTrue(tableToKeep, test=is.na, mCols=getAllColNamesExcept(tableToKeep, c(idCols,'ImageChannel','MaskChannel')))
+	tableToKeep <- tableToKeep[!rowsToDiscard]
+	if(any(grepl('.p', tableToKeep$MaskChannel, fixed=T)))
+	{
+		stop("There shouldn't be any .p nomenclature left over in the MaskChannel column at this step within the function. Check to see if all of the id columns were provided. Aborting.")
+	}
+	
+	# Table to summarize
+	x <- x[, mget(colsToSummarize), by=c(idCols,'MaskChannel','ImageChannel')] # Use by statement to keep idcols
+	rowsToDiscard <- allColsTrue(x, test=is.na, mCols=getAllColNamesExcept(x, c(idCols,'ImageChannel','MaskChannel')))
+	x <- x[!rowsToDiscard]
+	# If there isn't one already, create a column that just has the MaskChannel information split from the subregion ids (i.e., p1, p2, ..., pn)
+	if(!('MaskChannel2' %in% names(x)))
+	{
+		splitColumnAtString(x, colToSplit='MaskChannel', sep='.p', newColNames=c('MaskChannel2'), keep=c(1L))
+	}
+	
+	# # Check to make sure that eventual remerging of the tables will be legitimate.
+	# uniqueKeep <- tableToKeep[, list(v=T), by=c('ImageChannel','MaskChannel2')]
+	# uniqueSummary <- x[, list(v=T), by=c('ImageChannel','MaskChannel2')]
+	# testTable <- rbindlist(list(uniqueKeep,uniqueSummary), use.names=T)
+	# testTable <- testTable[, list(v=T), by=c('ImageChannel','MaskChannel')]
+	# if((nrow(uniqueKeep) + nrow(uniqueSummary)) != nrow(testTable))
+	# {
+	#      stop("We use rbindlist to merge the tables later which assumes unique cId, 
+	#           ImageChannel, MaskChannel combinations for geometric data compared to 
+	#           other data. This doesn't appear to be true so throwing error and aborting. 
+	#           Need to use merge function for portions of the table that share cId, 
+	#           ImageChannel, MaskChannel combinations and rbindlist for unique ones.")
+	# }
+	
+	# Make columns with weights for each subregion
+	x[, ':='(weights=Geometric.SizeIterable/(sum(Geometric.SizeIterable, na.rm=T)), countWeights=Geometric.SizeIterable/(max(Geometric.SizeIterable, na.rm=T))), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+	
+	# Calculate ratios and remove the corresponding parent metrics
+	x[, ':='(Geometric.FeretsAspectRatio = Geometric.MaximumFeretsDiameter/Geometric.MinimumFeretsDiameter, Geometric.EllipseAspectRatio = Geometric.MajorAxis/Geometric.MinorAxis)]
+	removeCols(x, c('Geometric.MaximumFeretsDiameter', 'Geometric.MinimumFeretsDiameter', 'Geometric.MajorAxis', 'Geometric.MinorAxis', 'Geometric.MaximumFeretsAngle', 'Geometric.MinimumFeretsAngle'))
+	
+	# Remove subregion data where any Geometric feature measure is NA (typically small regions with no area etc.)
+	rowsToDiscard <- anyColsTrue(x, test=is.na, mColsContaining='Geometric.')
+	x <- x[!rowsToDiscard]
+	# Now we have only subregion data where the geometric information is fully defined
+	
+	# Decide how to combine different geometric features
+	#geomFeatures <- c('Convexity', 'Solidity', 'SizeIterable', 'BoundarySize', 'MainElongation', 'Circularity',
+	#'Boxivity', 'Eccentricity', 'MajorAxis', 'MaximumFeretsDiameter', 'MinimumFeretsDiameter',
+	#'MinorAxis', 'Roundness', 'X', 'Y')
+	geomFeatures_Total <- c('Geometric.SizeIterable', 'Geometric.BoundarySize')
+	geomFeatures_SizeWeightedMean <- c('Geometric.SizeIterable', 'Geometric.Convexity', 'Geometric.Solidity', 'Geometric.MainElongation', 'Geometric.Circularity', 'Geometric.Boxivity', 'Geometric.Eccentricity', 'Geometric.BoundarySize','Geometric.FeretsAspectRatio','Geometric.EllipseAspectRatio','Geometric.Roundness')
+	
+	# Aggregate geometry data from the different subregions (this created duplicate row information)
+	# all na.rm's are removed to cause errors if any NA's are found.
+	for(feature in geomFeatures_Total)
+	{
+		x[, (paste0(feature, '.Total')):=sum(get(feature)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+	}
+	for(feature in geomFeatures_SizeWeightedMean)
+	{
+		x[, (feature):=sum(get(feature)*weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+	}
+	
+	# Create new count columns (this also results in duplicate row information)
+	x[, ':='(N=as.double(.N), weightedN=sum(countWeights)), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+	
+	if(all(c('Geometric.X','Geometric.Y') %in% names(x)))
+	{
+		# Calculate point stats
+		x[, c('Geometric.SubRegionIntensity', 'Geometric.SubRegionWeightedIntensity', 'Geometric.SubRegionConvexArea', 'Geometric.SubRegionConvexPerimeter', 'Geometric.SubRegionRadius', 'Geometric.SubRegionCircularity'):=getPointStats(Geometric.X, Geometric.Y, weights), by=c(idCols, 'ImageChannel', 'MaskChannel2')]
+	}
+	
+	# Overwrite Maskchannel that currently encodes subregion as well and replace with just MaskChannel information.
+	# Also remove helper columns
+	
+	if(removeXY)
+	{
+		x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL, Geometric.X=NULL, Geometric.Y=NULL)]
+	}
+	else
+	{
+		x[, ':='(MaskChannel=MaskChannel2, MaskChannel2=NULL, weights=NULL, countWeights=NULL)]
+	}
+	
+	# Remove all the duplicate information that was created during calculations
+	x <- unique(x)
+	
+	# Now merge tableToKeep and x
+	x <- merge(x=tableToKeep, y=x, by=c(idCols, 'MaskChannel', 'ImageChannel'), all=T)
+	
+	# Return the result
+	return(x)
 }
 
 summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
@@ -467,112 +467,125 @@ summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
 	return(x)
 }
 
-standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, col.use.percentiles=F, percentiles=c(0.05,0.95), data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T, na.rm.no.variance.cols=F)
+standardizeWideData <- function(x, row.normalize=F, row.use.median=F, col.use.median=F, col.use.mad=F, col.use.percentiles=F, percentiles=c(0.05,0.95), data.cols=NULL, data.cols.contains=NULL, by=NULL, trySDIfNeeded=T, na.rm.no.variance.cols=F, suffix=NULL)
 {
-     # x <- data.table(a=1.1:3.1, b=4.1:6.1, c=c(100.1,110.1,120.1)); duh <- copy(x); duh2 <- as.data.table(lapply(x, log))
-     # data.cols <- c('b','c')
-     # row.normalize=F
-     # row.use.median=F
-     # col.use.median=F
-     # col.use.mad=F
-     # data.cols.contains = NULL
-     # by=NULL
-
-     # Get the names of the columns of interest
-     cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
-
-     # Remove cols with now variance
-     removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm.no.variance.cols)
-
-     # Redefine cols just in case
-     cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
-
-     if(row.normalize)
-     {
-          # Take each row and divide it by the row mean/median (i.e., row normalize)
-          x[, rowNum:=as.double(1:nrow(x))] # create a rowNum column to do operations by row
-          if(row.use.median)
-          {
-               x[, c(cols) := lapply(.SD, "-", median(unlist(.SD))), .SDcols=cols, by=.(rowNum)]
-          }else
-          {
-               x[, c(cols) := lapply(.SD, "-", mean(unlist(.SD))), .SDcols=cols, by=.(rowNum)]
-          }
-          x[, rowNum:=NULL] # Remove the rowNum column
-     }
-
-     x[,c(cols):=lapply(.SD, FUN=robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
-     return(x)
+	# x <- data.table(a=1.1:3.1, b=4.1:6.1, c=c(100.1,110.1,120.1)); duh <- copy(x); duh2 <- as.data.table(lapply(x, log))
+	# data.cols <- c('b','c')
+	# row.normalize=F
+	# row.use.median=F
+	# col.use.median=F
+	# col.use.mad=F
+	# data.cols.contains = NULL
+	# by=NULL
+	
+	# Get the names of the columns of interest
+	cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
+	
+	# Remove cols with now variance
+	removeNoVarianceCols(x, use.mad=col.use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm.no.variance.cols)
+	
+	# Redefine cols just in case
+	cols <- getNumericColsOfInterest(x, data.cols=data.cols, data.cols.contains=data.cols.contains)
+	
+	# New cols
+	if(!is.null(suffix))
+	{
+		newCols <- paste(cols, suffix, sep='.')
+	}
+	
+	if(row.normalize)
+	{
+		# Take each row and divide it by the row mean/median (i.e., row normalize)
+		x[, rowNum:=as.double(1:nrow(x))] # create a rowNum column to do operations by row
+		if(row.use.median)
+		{
+			x[, c(newCols) := lapply(.SD, "-", median(unlist(.SD))), .SDcols=cols, by=.(rowNum)]
+		}else
+		{
+			x[, c(newCols) := lapply(.SD, "-", mean(unlist(.SD))), .SDcols=cols, by=.(rowNum)]
+		}
+		x[, rowNum:=NULL] # Remove the rowNum column
+	}
+	
+	if(row.normalize)
+	{
+		x[,c(newCols):=lapply(.SD, FUN=robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=newCols, by=by]
+	}
+	else
+	{
+		x[,c(newCols):=lapply(.SD, FUN=robustScale, use.median=col.use.median, use.mad=col.use.mad, use.percentiles=col.use.percentiles, percentiles=percentiles, trySDIfNeeded=trySDIfNeeded), .SDcols=cols, by=by]
+	}
+	return(x)
 }
 
 # Now perform regular column standardization (grouping as appropriate using 'by')
 robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c(0.05,0.95), trySDIfNeeded=T)
 {
-     if(use.median)
-     {
-          m <- median(x[is.finite(x)], na.rm=TRUE)
-     }
-     else if(use.percentiles)
-     {
-     	l(lo, hi) %=% getPercentileValues(x[is.finite(x)], c(percentiles[1],percentiles[2]))
-     	l(daMin, daMax) %=% qnorm(percentiles)
-          return(adjustIntensity(x, lo, hi, daMin, daMax))
-     }
+	if(use.median)
+	{
+		m <- median(x[is.finite(x)], na.rm=TRUE)
+	}
+	else if(use.percentiles)
+	{
+		l(lo, hi) %=% getPercentileValues(x[is.finite(x)], c(percentiles[1],percentiles[2]))
+		l(daMin, daMax) %=% qnorm(percentiles)
+		return(adjustIntensity(x, lo, hi, daMin, daMax))
+	}
 	else
 	{
 		m <- mean(x[is.finite(x)], na.rm=TRUE)
 	}
-     
-     if(use.mad)
-     {
-          sig <- mad(x[is.finite(x)], center=m, na.rm=TRUE)
-          if(!is.na(sig) & sig == 0 & trySDIfNeeded)
-          {
-               sig <- sd(x[is.finite(x)], na.rm=TRUE)
-          }
-     }
-     else
-     {
-          sig <- sd(x[is.finite(x)], na.rm=TRUE)
-     }
 	
-     return((x-m)/sig)
+	if(use.mad)
+	{
+		sig <- mad(x[is.finite(x)], center=m, na.rm=TRUE)
+		if(!is.na(sig) & sig == 0 & trySDIfNeeded)
+		{
+			sig <- sd(x[is.finite(x)], na.rm=TRUE)
+		}
+	}
+	else
+	{
+		sig <- sd(x[is.finite(x)], na.rm=TRUE)
+	}
+	
+	return((x-m)/sig)
 }
 
 removeNoVarianceCols <- function(x, use.mad=F, cols=NULL, by=NULL, trySDIfNeeded=T, na.rm=F)
 {
-     namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm)
-     if(length(namesToRemove) > 0)
-     {
-          if(use.mad)
-          {
-               print("Removing cols with a MAD of zero...")
-          }
-          else
-          {
-               print("Removing cols with a variance of zero...")
-          }
-          for(name in namesToRemove)
-          {
-               print(name)
-               x[,(name):=NULL]
-          }
-     }
+	namesToRemove <- getNoVarianceCols(x, use.mad=use.mad, cols=cols, by=by, trySDIfNeeded=trySDIfNeeded, na.rm=na.rm)
+	if(length(namesToRemove) > 0)
+	{
+		if(use.mad)
+		{
+			print("Removing cols with a MAD of zero...")
+		}
+		else
+		{
+			print("Removing cols with a variance of zero...")
+		}
+		for(name in namesToRemove)
+		{
+			print(name)
+			x[,(name):=NULL]
+		}
+	}
 }
 
 tempSD1 <- function(y, trySD)
 {
-     temp <- mad(y[is.finite(y)], na.rm = TRUE)
-     if(!is.na(temp) & temp == 0 & trySD)
-     {
-          temp <- sd(y[is.finite(y)], na.rm = TRUE)
-     }
-     return(temp)
+	temp <- mad(y[is.finite(y)], na.rm = TRUE)
+	if(!is.na(temp) & temp == 0 & trySD)
+	{
+		temp <- sd(y[is.finite(y)], na.rm = TRUE)
+	}
+	return(temp)
 }
 
 tempSD2 <- function(y, trySD)
 {
-     return(sd(y[is.finite(y)], na.rm = TRUE))
+	return(sd(y[is.finite(y)], na.rm = TRUE))
 }
 
 #'@param na.rm is whether or not to keep cols with groups for which an SD or MAD cannot be calculated (e.g., only 1 value or no values).
@@ -580,43 +593,43 @@ tempSD2 <- function(y, trySD)
 #'
 getNoVarianceCols <- function(x, use.mad, cols=NULL, by=NULL, trySDIfNeeded=T, na.rm=F)
 {
-     cols <- getNumericColsOfInterest(x, data.cols=cols)
-     tempMin <- function(x, na.rm)
-     {
-     	ret <- min(x, na.rm=na.rm)
-     	if(is.na(ret))
-     	{
-     		return(0)
-     	}
-     	return(ret)
-     }
-     if(use.mad)
-     {
-          tempSD <- tempSD1
-          if(is.null(by))
-          {
-               tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols]
-          }
-          else
-          {
-               tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
-               tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
-          }
-     }
-     else
-     {
-          tempSD <- tempSD2
-          if(is.null(by))
-          {
-               tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols]
-          }
-          else
-          {
-               tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
-               tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
-          }
-     }
-     return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
+	cols <- getNumericColsOfInterest(x, data.cols=cols)
+	tempMin <- function(x, na.rm)
+	{
+		ret <- min(x, na.rm=na.rm)
+		if(is.na(ret))
+		{
+			return(0)
+		}
+		return(ret)
+	}
+	if(use.mad)
+	{
+		tempSD <- tempSD1
+		if(is.null(by))
+		{
+			tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols]
+		}
+		else
+		{
+			tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
+			tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
+		}
+	}
+	else
+	{
+		tempSD <- tempSD2
+		if(is.null(by))
+		{
+			tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols]
+		}
+		else
+		{
+			tempNames <- x[,lapply(.SD, tempSD, trySD=trySDIfNeeded), .SDcols=cols, by=by]
+			tempNames <- tempNames[, lapply(.SD, tempMin, na.rm=na.rm), .SDcols=cols]
+		}
+	}
+	return(names(tempNames)[as.numeric(as.vector(tempNames))==0])
 }
 
 ##### Long Table Operations #####
@@ -717,13 +730,13 @@ removeMeasurementNamesContaining <- function(x, names)
 
 removeMeasurementNames <- function(x, names)
 {
-     print("Removing the following Measurements...")
-     for(name in names)
-     {
-          print(name)
-     }
-     x <- x[!(Measurement %in% names)]
-     return(x)
+	print("Removing the following Measurements...")
+	for(name in names)
+	{
+		print(name)
+	}
+	x <- x[!(Measurement %in% names)]
+	return(x)
 }
 
 replaceSubStringInAllRowsOfCol <- function(x, old, new, col)
@@ -746,62 +759,62 @@ fixLongTableStringsInCol <- function(x, col)
 
 filterLBPCodes <- function(x, nSigma=-2)
 {
-     LBPCols <- getColNamesContaining(x, 'LBP')
-     LBPTots <- as.numeric(as.vector(lapply.data.table(x, FUN=function(x){log(sum(x, na.rm=T)+1)}, cols=LBPCols)))
-     LBPColsToDelete <- LBPCols[LBPTots < (median(LBPTots) + nSigma*mad(LBPTots))]
-     removeCols(x, LBPColsToDelete)
+	LBPCols <- getColNamesContaining(x, 'LBP')
+	LBPTots <- as.numeric(as.vector(lapply.data.table(x, FUN=function(x){log(sum(x, na.rm=T)+1)}, cols=LBPCols)))
+	LBPColsToDelete <- LBPCols[LBPTots < (median(LBPTots) + nSigma*mad(LBPTots))]
+	removeCols(x, LBPColsToDelete)
 }
 
 splitColumnAtString <- function(x, colToSplit, newColNames, sep='.', keep=NULL)
 {
-     x[, (newColNames) := tstrsplit(get(colToSplit), sep, fixed=T, keep=keep)]
+	x[, (newColNames) := tstrsplit(get(colToSplit), sep, fixed=T, keep=keep)]
 }
 
 #' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelProducts <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboProducts, sep='_')
 {
-     return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
+	return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
 #' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelDifferences <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboDifferences, sep='_')
 {
-     return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
+	return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
 #' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelRatios <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboRatios, sep='_')
 {
-     return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
+	return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
 #' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelLogRatios <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboLogRatios, sep='_')
 {
-     return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
+	return(performChannelComboCalcs(x, comboCol=comboCol, valsToPermute=valsToPermute, idCols=idCols, mCols=mCols, mColContains=mColContains, FUN=FUN, sep=sep))
 }
 
 #' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 performChannelComboCalcs <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN, sep='_', ...)
 {
-     uniqueChannels <- valsToPermute
-     
-     if(is.null(mCols))
-     {
-          mCols <- getColNamesContaining(x, mColContains)
-     }
-     
+	uniqueChannels <- valsToPermute
+	
+	if(is.null(mCols))
+	{
+		mCols <- getColNamesContaining(x, mColContains)
+	}
+	
 	if(length(uniqueChannels) > 1)
 	{
-	     validRows <- x[[comboCol]] %in% uniqueChannels
-	     for(mCol in mCols)
-	     {
-	          validRows <- validRows & !is.na(x[[mCol]])
-	     }
-	     x2 <- x[validRows, lapply(.SD, FUN=FUN, ...), .SDcols=mCols, by=idCols]
-	     x2[[comboCol]] <- x[validRows, lapply(.SD, FUN=getComboNames, sep=sep), .SDcols=comboCol, by=idCols][[comboCol]]
-	    return(x2)
-	     
+		validRows <- x[[comboCol]] %in% uniqueChannels
+		for(mCol in mCols)
+		{
+			validRows <- validRows & !is.na(x[[mCol]])
+		}
+		x2 <- x[validRows, lapply(.SD, FUN=FUN, ...), .SDcols=mCols, by=idCols]
+		x2[[comboCol]] <- x[validRows, lapply(.SD, FUN=getComboNames, sep=sep), .SDcols=comboCol, by=idCols][[comboCol]]
+		return(x2)
+		
 	}else
 	{
 		# return an empty table with the same columns as provided
@@ -824,9 +837,9 @@ performChannelComboCalcs <- function(x, comboCol, valsToPermute, idCols, mCols=N
 #' The setnames is performed on the combodata just prior to merging with x
 mergeComboData <- function(x, comboData, mCol.old, mCol.new)
 {
-     setnames(comboData, old=mCol.old, new=mCol.new)
-     x <- merge(x, comboData, by=c('cId','ImageChannel','MaskChannel'), all=T)
-     return(x)
+	setnames(comboData, old=mCol.old, new=mCol.new)
+	x <- merge(x, comboData, by=c('cId','ImageChannel','MaskChannel'), all=T)
+	return(x)
 }
 
 # Meant to be called on a subset of the main table
@@ -869,25 +882,25 @@ getComboProducts <- function(x)
 # Meant to be called on a subset of the main table
 getComboRatios <- function(x)
 {
-     if(length(x) < 2)
-     {
-          return(NULL)
-     }
-     temp <- combn(x, 2)
-     temp <- temp[1,]/temp[2,]
-     return(temp)
+	if(length(x) < 2)
+	{
+		return(NULL)
+	}
+	temp <- combn(x, 2)
+	temp <- temp[1,]/temp[2,]
+	return(temp)
 }
 
 # Meant to be called on a subset of the main table
 getComboLogRatios <- function(x)
 {
-     if(length(x) < 2)
-     {
-          return(NULL)
-     }
-     temp <- combn(x, 2)
-     temp <- log(temp[1,]/temp[2,])
-     return(temp)
+	if(length(x) < 2)
+	{
+		return(NULL)
+	}
+	temp <- combn(x, 2)
+	temp <- log(temp[1,]/temp[2,])
+	return(temp)
 }
 
 calculateRMSofHaralick <- function(x, removeOriginalHaralickMeasures=FALSE)
@@ -899,13 +912,13 @@ calculateRMSofHaralick <- function(x, removeOriginalHaralickMeasures=FALSE)
 	dNames <- gsub("Horizontal", "Diagonal", hNames)
 	adNames <- gsub("Horizontal", "AntiDiagonal", hNames)
 	avgNames <- gsub("Horizontal", "Avg", hNames)
-
+	
 	haralickNames <- data.frame(H=hNames, V=vNames, D=dNames, AD=adNames, avg=avgNames, stringsAsFactors=FALSE)
 	myfunc <- function(row, theNames)
 	{
 		return(mean(row[,theNames$H] + row[,theNames$V] + row[,theNames$D] + row[,theNames$AD]))
 	}
-
+	
 	x <- data.frame(x)
 	for(i in 1:nrow(haralickNames))
 	{
@@ -915,25 +928,25 @@ calculateRMSofHaralick <- function(x, removeOriginalHaralickMeasures=FALSE)
 			x <- x[,!(names(x) %in% as.character(haralickNames[i,1:4]))]
 		}
 	}
-
+	
 	return(data.table(x))
 }
 
 calculateGeometricFeaturesFromDNZernikeCircles <- function(x)
 {
-     if(sum(grepl('DNZernike',names(x),fixed=T)) == 0)
-     {
-          warning("Didn't find any DNZernike circles to perform calculations. Aborting.")
-     }
-     else
-     {
-          # the outercircle is 1.5 times the equivalent radius of the whole cell, so adjust appropriately to get actual cell radius
-          x[, ':='(Geometric.Area.Nuc=pi*DNZernikeInnerCircleR^2, Geometric.Area.WholeCell=pi*((2.0/3.0)*DNZernikeOuterCircleR)^2)]
-          x[, ':='(Geometric.NucAreaFraction=Geometric.Area.Nuc/Geometric.Area.WholeCell)]
-          x[, ':='(Geometric.NucNormalizedOffset=sqrt((DNZernikeInnerCircleX-DNZernikeOuterCircleX)^2 + (DNZernikeInnerCircleY-DNZernikeOuterCircleY)^2)/DNZernikeInnerCircleR)]
-          x[, ':='(Geometric.WholeCellNormalizedOffset=sqrt((DNZernikeInnerCircleX-DNZernikeOuterCircleX)^2 + (DNZernikeInnerCircleY-DNZernikeOuterCircleY)^2)/DNZernikeOuterCircleR)]
-          x[, ':='(Geometric.NormalizedOffset=sqrt((DNZernikeInnerCircleX-DNZernikeOuterCircleX)^2 + (DNZernikeInnerCircleY-DNZernikeOuterCircleY)^2)/(DNZernikeOuterCircleR-DNZernikeInnerCircleR))]
-     }
+	if(sum(grepl('DNZernike',names(x),fixed=T)) == 0)
+	{
+		warning("Didn't find any DNZernike circles to perform calculations. Aborting.")
+	}
+	else
+	{
+		# the outercircle is 1.5 times the equivalent radius of the whole cell, so adjust appropriately to get actual cell radius
+		x[, ':='(Geometric.Area.Nuc=pi*DNZernikeInnerCircleR^2, Geometric.Area.WholeCell=pi*((2.0/3.0)*DNZernikeOuterCircleR)^2)]
+		x[, ':='(Geometric.NucAreaFraction=Geometric.Area.Nuc/Geometric.Area.WholeCell)]
+		x[, ':='(Geometric.NucNormalizedOffset=sqrt((DNZernikeInnerCircleX-DNZernikeOuterCircleX)^2 + (DNZernikeInnerCircleY-DNZernikeOuterCircleY)^2)/DNZernikeInnerCircleR)]
+		x[, ':='(Geometric.WholeCellNormalizedOffset=sqrt((DNZernikeInnerCircleX-DNZernikeOuterCircleX)^2 + (DNZernikeInnerCircleY-DNZernikeOuterCircleY)^2)/DNZernikeOuterCircleR)]
+		x[, ':='(Geometric.NormalizedOffset=sqrt((DNZernikeInnerCircleX-DNZernikeOuterCircleX)^2 + (DNZernikeInnerCircleY-DNZernikeOuterCircleY)^2)/(DNZernikeOuterCircleR-DNZernikeInnerCircleR))]
+	}
 }
 
 ##### JUNK YARD #####
@@ -1319,6 +1332,395 @@ dep_trySample <- function(x, n, replace=F, prob=NULL)
 	{
 		return(sample(x, n, replace, prob))
 	}
+}
+
+# Zernike Moment calcualtions
+
+#' JEX outputs an affine invariant Zernike moment (position, scale, & rotation)
+#' In order to make it inensity invariant, the magnitude must be divided by the mean.
+#' This is meant to be used with long tables.
+#' 
+#' Not sure yet whether to call this before or after calculating dot products (maybe)
+meanNormalizeLongZernikeMoments <- function(x, idCols='cId')
+{
+	mNames <- getMeasurementNamesContaining(x, 'ZernikeMag')
+	for(mName in mNames)
+	{
+		x <- divideMAbyMBbyRef(x, mName, 'Stats.Mean', idCols=idCols)
+	}
+	return(x)
+}
+
+#' JEX outputs an affine invariant Zernike moment (position, scale, & rotation)
+#' In order to make it inensity invariant, the magnitude must be divided by the mean.
+#' This is meant to be used with wide tables that HAVEN'T YET INCORPORATED ImageChannel
+#' and MaskChannel into the feature name.
+#' 
+#' Not sure yet whether to call this before or after calculating dot products (maybe)
+meanNormalizeWideZernikeMoments <- function(x, meanName='Stats.Mean')
+{
+	mNames <- getColNamesContaining(x, 'ZernikeMag')
+	for(mName in mNames)
+	{
+		x[, c(mName):=get(mName)/get(meanName)]
+	}
+	return(x)
+}
+
+
+# Do this AFTER the '_Order_' and '_Rep_' strings have been removed from names
+# Do this BEFORE differencing channels
+# Do this BEFORE standardizing any data
+calculateZernikeDotProduct <- function(x, imageChannelValsToPermute=unique(x$ImageChannel)[!grepl('_',unique(x$ImageChannel,fixed=T))], idCols=c('cId','MaskChannel'))
+{
+	calculateZernikeReAndIm(x)
+	reProducts <- calculateChannelProducts(x, sep='_', comboCol='ImageChannel', valsToPermute=imageChannelValsToPermute, idCols=idCols, mColContains='ZernikeRe')
+	imProducts <- calculateChannelProducts(x, sep='_', comboCol='ImageChannel', valsToPermute=imageChannelValsToPermute, idCols=idCols, mColContains='ZernikeIm')
+	ret <- addReAndImProducts(reProducts=reProducts, imProducts=imProducts)
+	removeColsContaining(x, c('ZernikeRe','ZernikeIm'))
+	x <- merge(x, ret, by=c(idCols, 'ImageChannel'), all=T)
+	return(x)
+}
+
+# This gets called on the entire table to convert Mag and Phase into Re and Im.
+calculateZernikeReAndIm <- function(x)
+{
+	magNames <- getColNamesContaining(x, 'ZernikeMag')
+	for(magName in magNames)
+	{
+		phaseName <- gsub('Mag','Phase',magName)
+		if(!(phaseName %in% names(x)))
+		{
+			next
+		}
+		reName <- gsub('Mag','Re',magName)
+		imName <- gsub('Mag','Im',magName)
+		x[, (reName):=get(magName) * cosd(get(phaseName))]
+		x[, (imName):=get(magName) * sind(get(phaseName))]
+	}
+	return(x[])
+}
+
+# This is a helper function for calculateZernikeDotProduct.
+addReAndImProducts <- function(reProducts, imProducts)
+{
+	reNames <- getColNamesContaining(reProducts, 'ZernikeRe')
+	dotNames <- gsub('Re','Dot',reNames)
+	for(reName in reNames)
+	{
+		imName <- gsub('Re','Im',reName)
+		if(!(imName %in% names(x)))
+		{
+			next
+		}
+		reProducts[, (reName):=get(reName) + imProducts[[imName]]]
+	}
+	setnames(reProducts, reNames, dotNames)
+	return(reProducts)
+	
+	# mags <- x[grepl('ZernikeMag',Measurement,fixed=T)]
+	# phases <- x[grepl('ZernikePhase',Measurement,fixed=T)]
+	# result1 <- copy(mags)
+	# result1[,Measurement:=gsub('ZernikeMag','ZernikeRe',Measurement)]
+	# result1$Value <- mags$Value * cosd(phases$Value)
+	# result2 <- copy(mags)
+	# result2[,Measurement:=gsub('ZernikeMag','ZernikeIm',Measurement)]
+	# result2$Value <- mags$Value * sind(phases$Value)
+	# ret <- rbindlist(list(result1,result2),use.names=TRUE)
+	# return(ret)
+}
+
+# Do this AFTER the '_Order_' and '_Rep_' strings have been removed from names (part of fixColNames())
+getZernikeOrderReps <- function(x)
+{
+	ret <- unique(tstrsplit(tstrsplit(getColNamesContaining(x, 'ZernikeMag'), 'Mag', keep=2L)[[1]], '_', keep=1L)[[1]])
+	return(ret)
+}
+
+preprocessData <- function(x,
+					  time.col,
+					  imageDims,
+					  labelDims,
+					  doGeometry=F,
+					  doHaralick=F,
+					  doZernike=F,
+					  doDNZandNucwSecOnly=T,
+					  doSymmetry=F,
+					  channelsToDot=NULL,
+					  log.args=NULL, # 			lapply.data.table(x, by=log.args$by, cols=log.args$cols, FUN=logicle, logicle.params=list(), base=getDefault(log.args$base, 10), neg.rm=getDefault(log.args$neg.rm, F), in.place=T)
+					  sim.args=NULL, # 			lapply.data.table(x, by=sim.args$by, cols=sim.args$cols, FUN=sim.transform, in.place = T) percentile and 1-percentile are used as upper and lower bounds
+					  sim.percentile.args=NULL, # 	lapply.data.table(x, by=sim.percentile.args$by, cols=sim.percentile.args$cols, FUN=sim.transform.percentile, percentile=getDefault(sim.args$percentile, 0.01), in.place = T) percentile and 1-percentile are used as upper and lower bounds
+					  logit.args=NULL, #			lapply.data.table(x, by=logit.args$by, cols=logit.args$cols, FUN=logit.transform, base=getDefault(logit.args$base, 10), in.place = T)
+					  save.dir=NULL)
+
+{
+	library(data.table)
+	library(bit64)
+	library(MASS)
+	library(zoo)
+	
+	if(!is.null(channelsToDot) && any(!(channelsToDot %in% unique(x$ImageChannel))))
+	{
+		stop(paste('Some of the channels for calculating Zernike dot products do not exist in the table (', paste(channelsToDot[!(log.args$cols %in% unique(x$ImageChannel))], collapse=','), '). Aborting.'))
+	}
+	
+	x2 <- copy(x)
+	setnames(x2, time.col, 'Time')
+	
+	setorderv(x2, c('e.x', 'e.y', 'cId', 'Time'))
+	
+	# Avoid standardizing the Id, ImRow, and ImCol etc.
+	# lapply.data.table(x, FUN=as.character, in.place=T, cols=c('Id',imageDims,labelDims))
+	
+	# Get rid of extraneous text in the measurement names that are carried over from JEX/Java
+	fixLongTableStringsInCol(x2, 'Measurement')
+	
+	if(!is.null(log.args) && (is.null(log.args$cols) || any(!(log.args$cols %in% names(x2)))))
+	{
+		print(uniqueo(x2$Measurement))
+		stop(paste('Some of the cols to log transform do not exist in the table (', paste(log.args$cols[!(log.args$cols %in% unique(x2$Measurement))], collapse=','), '). Aborting.'))
+	}
+	
+	if(!is.null(sim.args) && (is.null(sim.args$cols) || any(!(sim.args$cols %in% names(x2)))))
+	{
+		print(uniqueo(x2$Measurement))
+		stop(paste('Some of the cols to log transform do not exist in the table (', paste(sim.args$cols[!(sim.args$cols %in% unique(x2$Measurement))], collapse=','), '). Aborting.'))
+	}
+	
+	if(!is.null(logit.args) && (is.null(logit.args$cols) || any(!(logit.args$cols %in% names(x2)))))
+	{
+		print(uniqueo(x2$Measurement))
+		stop(paste('Some of the cols to log transform do not exist in the table (', paste(logit.args$cols[!(logit.args$cols %in% unique(x2$Measurement))], collapse=','), '). Aborting.'))
+	}
+	
+	##### CONVERT TO WIDE TABLE WITH IMAGEHCANNEL AND MASKCHANNEL #####
+	
+	# dups <- duplicated(x, by=getAllColNamesExcept(x, c('Value','Measurement')))
+	# duh <- x[dups]
+	# View(duh)
+	
+	# First reorganize, keeping ImageChannel and MaskChannel as columns for various calculations
+	x2 <- reorganize(x2, idCols=c('cId','ImageChannel','MaskChannel','Time',labelDims), measurementCols=c('Measurement'), valueCols = c('Value'), sep='.')
+	x2 <- removeCols(x2,c('Geometric.X','Geometric.Y')) # This data set was quantified with a previous version of FeatureExtraction that doesn't allow 'tracking' X and Y. The position is relative.
+	
+	# # Normalize standard deviation (PER CELL) and remove redundant metric of variance
+	# x2[, ':='(Stats.StdDev=Stats.StdDev/abs(Stats.Mean), Stats.Variance=NULL)]
+	
+	# Summarize the geometric data that currently has data for each subregion of each mask.
+	if(doGeometry)
+	{
+		x2 <- summarizeGeometry(x2, cellIdCols=c('cId','Time',labelDims), removeXY=F) # Expect a warning from duplication of values (these duplicates are then removed)
+	}
+	
+	# Calculate final rotationally 'invariant' Haralick measures
+	if(doHaralick)
+	{
+		x2 <- calculateRMSofHaralick(x2, removeOriginalHaralickMeasures=T)
+	}
+	
+	# Normalize the Zernike mangnitudes to make them intensity invariant (Should be ok if the mean is neg here atlhough 0 is tricky :-/)
+	if(doZernike)
+	{
+		x2 <- meanNormalizeWideZernikeMoments(x2, meanName='Stats.Mean')
+	}
+	
+	# Summarize the symmetry data that currently has raw symmetry measurements
+	if(doSymmetry)
+	{
+		summarizeSymmetryData(x2, sim.trans=T, logit.trans=T)
+	}
+	
+	# Calculate Zernike Dot Products as a way to measure co-localization
+	# Just keep DNZ Zernike features and then also NUCwSEC Zernike features
+	if(doZernike && doDNZandNucwSecOnly)
+	{
+		zernikeCols <- getColNamesContaining(x2, 'Zernike')
+		zernikeCols <- zernikeCols[!grepl('NUCwSEC',zernikeCols) & grepl('_',zernikeCols)]
+		removeCols(x2, zernikeCols)
+	}
+	if(!is.null(channelsToDot))
+	{
+		x2 <- calculateZernikeDotProduct(x2, imageChannelValsToPermute=channelsToDot, idCols=c('cId','MaskChannel',labelDims))
+	}
+	
+	# Calculate Geometric Size Ratios
+	# ratioData <- calculateChannelLogRatios(x2, comboCol='MaskChannel', valsToPermute=c("1_Lower","1_Upper","3","4","5","6","Cyt","WholeCell"), idCols=c('cId','ImageChannel'), mCols='Geometric.SizeIterable.Total')
+	# x2 <- mergeComboData(x2, ratioData, mCol.old='Geometric.SizeIterable.Total', mCol.new='Geometric.SizeIterable.Total.Ratio')
+	# rm(ratioData)
+	
+	# ##### CLEAN UP WEIRD DATA #####
+	# # Remove bad features or features that are no longer necessary
+	# # removeColsContaining(x2, c('ImageMoments.Moment','ImageMoments.HuMoment','ImageMoments.NormalizedCentralMoment'))#, getColNamesContaining(x, 'ImageMoments.CentralMoment'))
+	# # removeColsContaining(x2, 'HistogramBin')
+	# removeColsContaining(x2, c('Circle','Phase'))
+	# # filterLBPCodes(x2, nSigma=-2)
+	
+	##### TRANFORMATIONS #####
+	# # Perform and transformations of the data if needed such as log transformations of intensity data.
+	# colsToTransform <- c('Stats.Sum', 'Stats.SumOfInverses', 'Stats.SumOfLogs', 'Stats.SumOfSquares', 'Stats.Max', 'Stats.Mean', 'Stats.Min', 'Stats.Median')
+	if(!is.null(log.args))
+	{
+		lapply.data.table(x2, by=log.args$by, cols=log.args$cols, FUN=logicle, logicle.params=list(), base=getDefault(log.args$base, 10), neg.rm=getDefault(log.args$neg.rm, F), in.place=T)
+	}
+	if(!is.null(sim.args))
+	{
+		lapply.data.table(x2, by=sim.args$by, cols=sim.args$cols, FUN=sim.transform, in.place = T)
+	}
+	if(!is.null(sim.percentile.args))
+	{
+		lapply.data.table(x2, by=sim.percentile.args$by, cols=sim.percentile.args$cols, FUN=sim.transform.percentile, percentile=getDefault(sim.args$percentile, 0.01), in.place = T)
+	}
+	if(!is.null(logit.args))
+	{
+		lapply.data.table(x2, by=logit.args$by, cols=logit.args$cols, FUN=logit.transform, base=getDefault(logit.args$base, 10), in.place = T)
+	}
+	
+	fwrite(file=file.path(save.dir, 'x2.csv'), x2, row.names=F)
+	x3 <- copy(x2)
+	
+	##### TRANSPOSE #####
+	# Transpose data so that each row contains all data for an individual cell
+	x3 <- refactor(x3)
+	x3 <- reorganize(x3, idCols=c('cId','Time',labelDims), measurementCols=c('ImageChannel','MaskChannel'), valueCols=getAllColNamesExcept(x3, c('cId','Time','ImageChannel','MaskChannel',labelDims)), sep='.')
+	
+	# Remove all columns that are ALL NON-FINITE
+	removeColsMatching(x3, col.test=function(a){all(!is.finite(a))})
+	###########################
+	
+	fwrite(file=file.path(save.dir, 'x3.csv'), x3, row.names=F)
+	return(x3)
+}
+
+calculateDrugSensitivityMetrics <- function(x,
+								    imageDims,
+								    labelDims,
+								    maskChan,
+								    nucChan,
+								    phaseChan,
+								    gap.max = 2,
+								    initialCellsOnly = T,
+								    P.string = '.P',
+								    Neg.string = '.Neg')
+{
+	library(data.table)
+	library(bit64)
+	library(MASS)
+	library(zoo)
+	
+	# Make Time real
+	x3[, Time:= 0.5 + (Time-1)*0.5]
+	x3[, Period.1:=as.numeric(cut(Time, breaks=seq(0,122,2), right=T))]
+	x3[, Period.1:=factor(Period.1, labels=uniqueo(Period.1)*2)]
+	x3[, Period.2:=as.numeric(cut(Time, breaks=c(0,8,16,24,48,96,120), right=T))]
+	x3[, Period.2:=factor(Period.2, levels=1:6, labels=c('0-8','8-16','16-24','24-48','48-96','96-120'))]
+	
+	# Filter out cells with time gaps
+	x3[, maxGap:=max(getDeltas(sort(Time))), by=c('cId')]
+	x3 <- x3[maxGap <= gap.max]
+	
+	if(initialCellsOnly)
+	{
+		x3[, minTime:=min(Time), by=c('cId')]
+		x3 <- x3[minTime == min(unique(Time))]
+	}
+	
+	# Other Calcs
+	# setnames(x3, old=getAllColNamesExcept(x3, c('cId','Time','Period.2','Period.1',labelDims)), new=paste0('Stats.Mean.',getAllColNamesExcept(x3,c('cId','Time','Period.2','Period.1',labelDims))))
+	setorderv(x3, c(labelDims,'cId','Time'))
+	suppressWarnings(x3[, c('Nuc','Movement','Death','Phase','Death2'):=NULL])
+	suppressWarnings(x3[, Nuc:=log10(get(paste0('Stats.Mean.', nucChan, '.', maskChan)))])
+	suppressWarnings(x3[, Phase:=log10(get(paste0('Stats.Mean.', phaseChan, '.', maskChan)))])
+	suppressWarnings(x3[, Phase:=log10(get(paste0('Stats.Mean.', phaseChan, '.', maskChan)))])
+	# x3[, Phase2:=log10(roll.mean(Stats.Mean.1.1, na.rm=T, win.width=3)), by='cId']
+	
+	setorderv(x3, c(labelDims, 'cId', 'Time'))
+	
+	# Create Plasma, Neg, and Drug columns if necessary
+	x3[, P:=grepl('.P',Tx,fixed=T)]
+	x3[, Neg:=grepl('.Neg',Tx,fixed=T)]
+	splitColumnAtString(x3, colToSplit = 'Tx', newColNames='Drug', sep='.', keep=1)
+	
+	return(x3)
+}
+
+getEventStatus <- function(time, LD, n.true=3, suffix='')
+{
+	if(!is.logical(LD))
+	{
+		stop('This function assumes LD is a logical with 0 = live and 1=dead')
+	}
+	if(length(time) != length(LD))
+	{
+		stop('This function assumes time and LD are same length.')
+	}
+	LD <- rollapply(LD, width=n.true, FUN=sum, na.rm=T, partial=T, align='left')
+	event <- which(LD==n.true)
+	if(length(event)==0)
+	{
+		# The event never happened
+		ret <- list(LD.time=time[length(time)], LD.status=0)
+		names(ret) <- paste0(names(ret), suffix)
+		return(ret)
+	}
+	ret <- list(LD.time=time[event[1]], LD.status=1)
+	names(ret) <- paste0(names(ret), suffix)
+	return(ret)
+}
+# LIVE / DEAD
+getEventRecoveryStatus <- function(time, LD, n.true=3, suffix='')
+{
+	if(!is.logical(LD))
+	{
+		stop('This function assumes LD is a logical with 0 = live and 1=dead')
+	}
+	if(length(time) != length(LD))
+	{
+		stop('This function assumes time and LD are same length.')
+	}
+	LD <- rollapply(LD, width=n.true, FUN=sum, na.rm=T, partial=T, align='left')
+	DL <- rollapply(!LD, width=n.true, FUN=sum, na.rm=T, partial=T, align='left')
+	deathEvent <- which(LD==n.true)
+	lifeEvent <- which(DL==n.true)
+	if(length(deathEvent)==0 | length(lifeEvent)==0)
+	{
+		# The event never happened
+		ret <- list(LD.time=time[length(time)], LD.status=0)
+		names(ret) <- paste0(names(ret), suffix)
+		return(ret)
+	}
+	else
+	{
+		recoveryEvent <- lifeEvent[lifeEvent > deathEvent[1]]
+		if(length(recoveryEvent)==0)
+		{
+			# The event never happened
+			ret <- list(LD.time=time[length(time)], LD.status=0)
+			names(ret) <- paste0(names(ret), suffix)
+			return(ret)
+		}
+	}
+	ret <- list(LD.time=time[recoveryEvent[1]], LD.status=1)
+	names(ret) <- paste0(names(ret), suffix)
+	return(ret)
+}
+
+normalizePhase <- function(x)
+{
+	peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=c(3.1,4.5), main=copy(.BY[[1]]))), by='Tx']
+	data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], xlim=c(3.1,4.5), ylim=c(0,3), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), alpha=0.4, main='Phase Normalization')
+	x[, Phase.norm:=10*(Phase/peaks[peaks$Tx==.BY[[1]]]$peak.x-1), by=c('Tx')]
+	data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, add=T)
+}
+
+# Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
+normalizeNuc <- function(x,
+					nuc.lo,
+					nuc.hi,
+					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){length(blah)==0}))
+{
+	data.table.plot.all(x[Tx=='to.plot'], sample.size=5000, xcol='Nuc', xlim=c(-3,4), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), main='Nuc Standardization')
+	standardizeWideData(x, suffix='.norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
+	data.table.plot.all(x[Tx=='to.plot'], sample.size=5000, xlim=c(-3,4), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), add=T)
 }
 
 ##### Testing #####
