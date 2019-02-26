@@ -1829,7 +1829,6 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 		guides(colour = guide_legend(nrow = (length(Txs) %/% 4) + 1))
 	stats <- as.data.table(pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)$p.value, keep.rownames=T)
 	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
-	ss <- tableGrob(stats.sym)
 	if(save.plot)
 	{
 		fwrite(stats, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - pvalues.csv')))
@@ -1842,7 +1841,7 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 		print(daPlot)
 		print(stats)
 	}
-	return(list(stats=stats, stats.sym=stats.sym, daTable=ss, daPlot=daPlot))
+	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot))
 }
 
 ##### Testing #####
