@@ -1772,11 +1772,11 @@ normalizeNuc <- function(x,
 	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
 	if(!is.null(times))
 	{
-		data.table.plot.all(x[Time %in% times & Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Time', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+		data.table.plot.all(x[Time %in% times & Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Time', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
 	}
 	else
 	{
-		data.table.plot.all(x[Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+		data.table.plot.all(x[Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
 	}
 }
 
