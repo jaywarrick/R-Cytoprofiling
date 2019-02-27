@@ -1645,11 +1645,23 @@ calculateDrugSensitivityMetrics <- function(x,
 	}
 	
 	# Make Time real
+	if(min(x3$Time) == 0)
+	{
+		x3[, Time:=Time+1]
+	}
 	x3[, Time:= 0.5 + (Time-1)*0.5]
-	x3[, Period.1:=as.numeric(cut(Time, breaks=seq(0,122,2), right=T))]
-	x3[, Period.1:=factor(Period.1, labels=uniqueo(Period.1)*2)]
-	x3[, Period.2:=as.numeric(cut(Time, breaks=c(0,8,16,24,48,96,120), right=T))]
-	x3[, Period.2:=factor(Period.2, levels=1:6, labels=c('0-8','8-16','16-24','24-48','48-96','96-120'))]
+	x3[, Period.1:=as.numeric(cut(Time, breaks=seq(0,max(Time),2), right=T))]
+	x3[, Period.1:=factor(Period.1, labels=(uniqueo(Period.1)*2)[is.finite(uniqueo(Period.1)*2)])]
+	x3[, Period.2:=as.numeric(cut(Time, breaks=c(0,8,16,24,48,96,120,max(Time)), right=T))]
+	if(max(x3$Time) <= 120)
+	{
+		x3[, Period.2:=factor(Period.2, levels=1:6, labels=c('0-8','8-16','16-24','24-48','48-96','96-120'))]
+		
+	}
+	else
+	{
+		x3[, Period.2:=factor(Period.2, levels=1:7, labels=c('0-8','8-16','16-24','24-48','48-96','96-120',paste0('120-',max(Time))))]
+	}
 	
 	# Filter out cells with time gaps
 	x3[, maxGap:=max(getDeltas(sort(Time))), by=c('cId')]
@@ -1753,11 +1765,19 @@ normalizePhase <- function(x)
 normalizeNuc <- function(x,
 					nuc.lo,
 					nuc.hi,
-					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}))
+					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}),
+					times=NULL)
 {
 	data.table.plot.all(x[Tx==to.plot], sample.size=5000, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
 	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
-	data.table.plot.all(x[Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+	if(!is.null(times))
+	{
+		data.table.plot.all(x[Time %in% times & Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Time', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+	}
+	else
+	{
+		data.table.plot.all(x[Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+	}
 }
 
 makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, makePhase=T, makeNuc=T, makeDeath=T, save.dir)
@@ -1795,12 +1815,7 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 	
 	temp <- x.surv[!(LD.time==min(LD.time) & LD.status==1)]
 	temp <- temp[Tx %in% Txs]
-	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Phase.norm >= PhaseThresh)), by=c('Tx','Time')]
-	inits <- inits[, list(L=median(L)), by='Tx']
-	initialCounts <- x[Time == Time[1], list(N=.N), by=c('Tx','Time')]
-	initialCounts <- initialCounts[, list(N=median(N)), by=c('Tx')]
-	inits <- merge(inits, initialCounts, by='Tx')
-	inits[, init.viability:=round(100*L/N, 0)]
+	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Phase.norm >= PhaseThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
 	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
 	inits[, txt2:=paste(txt,'%', sep='')]
 	temp[, Tx:=factor(Tx, levels=Txs)]
