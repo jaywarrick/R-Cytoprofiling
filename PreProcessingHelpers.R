@@ -1755,9 +1755,9 @@ normalizeNuc <- function(x,
 					nuc.hi,
 					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}))
 {
-	data.table.plot.all(x[Tx==to.plot], sample.size=5000, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
+	data.table.plot.all(x[Tx %in% to.plot], sample.size=5000, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
 	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
-	data.table.plot.all(x[Tx==to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+	data.table.plot.all(x[Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
 }
 
 makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, makePhase=T, makeNuc=T, makeDeath=T, save.dir)
@@ -1784,7 +1784,7 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	}
 }
 
-plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir)
+plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4)
 {
 	if(is.null(Txs))
 	{
@@ -1795,8 +1795,8 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 	
 	temp <- x.surv[!(LD.time==min(LD.time) & LD.status==1)]
 	temp <- temp[Tx %in% Txs]
-	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Phase.norm >= PhaseThresh)), by=c('Tx','Time')]
-	inits <- inits[, list(L=median(L)), by='Tx']
+	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Phase.norm >= PhaseThresh, na.rm=T)), by=c('Tx','Time')]
+	inits <- inits[, list(L=median(L, na.rm=T)), by='Tx']
 	initialCounts <- x[Time == Time[1], list(N=.N), by=c('Tx','Time')]
 	initialCounts <- initialCounts[, list(N=median(N)), by=c('Tx')]
 	inits <- merge(inits, initialCounts, by='Tx')
@@ -1832,7 +1832,7 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 	if(save.plot)
 	{
 		fwrite(stats, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - pvalues.csv')))
-		png(file.path(save.dir, save.file), res=300, units='in', width=5, height=6)
+		png(file.path(save.dir, save.file), res=300, units='in', width=width, height=height)
 		print(daPlot)
 		dev.off()
 	}
