@@ -1815,7 +1815,7 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 	
 	temp <- x.surv[!(LD.time==min(LD.time) & LD.status==1)]
 	temp <- temp[Tx %in% Txs]
-	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Phase.norm >= PhaseThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
+	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
 	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
 	inits[, txt2:=paste(txt,'%', sep='')]
 	temp[, Tx:=factor(Tx, levels=Txs)]
