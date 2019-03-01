@@ -1687,7 +1687,6 @@ calculateDrugSensitivityMetrics <- function(x,
 	# Create Plasma, Neg, and Drug columns if necessary
 	x3[, P:=grepl('.P',Tx,fixed=T)]
 	x3[, Neg:=grepl('.Neg',Tx,fixed=T)]
-	splitColumnAtString(x3, colToSplit = 'Tx', newColNames='Drug', sep='.', keep=1)
 	
 	return(x3)
 }
@@ -1780,7 +1779,7 @@ normalizeNuc <- function(x,
 	}
 }
 
-makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, makePhase=T, makeNuc=T, makeDeath=T, save.dir)
+makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, makePhase=T, makeNuc=T, makeDeath=T, save.dir, type='cmd')
 {
 	dir.create(file.path(save.dir, 'MovieFrames'), showWarnings=F, recursive = T)
 	dir.create(file.path(save.dir, 'Movies'), showWarnings=F, recursive = T)
@@ -1790,17 +1789,17 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	if(makePhase)
 	{
 		data.table.plot.all(x, xcol='Phase.norm', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir, 'MovieFrames/PhaseDist_'), v=PhaseThresh, plot.by='Period.1', xlim=c(-3,1), density.args=list(draw.area=F, lwd=2))#, xlim=c(-2.5,2.5))
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseDist_%d.png', out.filename = 'Movies/Phase Histograms.mp4', frame.rate = 2)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseDist_%d.png', out.filename = 'Movies/Phase Histograms.mp4', frame.rate = 2, type=type)
 	}
 	if(makeNuc)
 	{
 		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,3), density.args=list(draw.area=F, lwd=2))
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = 'Movies/Nuc Histograms.mp4', frame.rate = 2)	
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = 'Movies/Nuc Histograms.mp4', frame.rate = 2, type=type)	
 	}
 	if(makeDeath)
 	{
 		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-1,1.3), density.args=list(draw.area=F, lwd=2))
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = 'Movies/Death Histograms.mp4', frame.rate = 2)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = 'Movies/Death Histograms.mp4', frame.rate = 2, type=type)
 	}
 }
 
