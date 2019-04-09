@@ -1650,8 +1650,9 @@ calculateDrugSensitivityMetrics <- function(x,
 		x3[, Time:=Time+1]
 	}
 	x3[, Time:= 0.5 + (Time-1)*0.5]
-	x3[, Period.1:=as.numeric(cut(Time, breaks=seq(0,max(Time),2), right=T))]
-	x3[, Period.1:=factor(Period.1, labels=(uniqueo(Period.1)*2)[is.finite(uniqueo(Period.1)*2)])]
+	max.time <- max(x3$Time)
+	breaks <- merge.vectors(seq(0,max.time,2), seq(0,max.time+1,2))
+	x3[, Period.1:=as.numeric(as.character(cut(Time, breaks=breaks, labels=breaks[2:length(breaks)], right=T)))]
 	x3[, Period.2:=as.numeric(cut(Time, breaks=c(0,8,16,24,48,96,120,max(Time)), right=T))]
 	if(max(x3$Time) <= 120)
 	{
@@ -1765,9 +1766,10 @@ normalizeNuc <- function(x,
 					nuc.lo,
 					nuc.hi,
 					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}),
-					times=NULL)
+					times=NULL,
+					sample.size=5000)
 {
-	data.table.plot.all(x[Tx %in% to.plot], sample.size=5000, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
+	data.table.plot.all(x[Tx %in% to.plot], sample.size=sample.size, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
 	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
 	if(!is.null(times))
 	{
@@ -1803,12 +1805,8 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	}
 }
 
-plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4)
+plotSurvivalCurve <- function(x.surv, x, Txs=uniqueo(x$Tx), ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, Tx.Labels.New=NULL, Tx.Colors=NULL)
 {
-	if(is.null(Txs))
-	{
-		Txs <- uniqueo(x$Tx)
-	}
 	
 	pval.coord = c(0, ylim[2]*pval.y)
 	
@@ -1817,12 +1815,35 @@ plotSurvivalCurve <- function(x.surv, x, Txs=NULL, ylab, flip=F, save.plot=T, sa
 	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
 	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
 	inits[, txt2:=paste(txt,'%', sep='')]
-	temp[, Tx:=factor(Tx, levels=Txs)]
+	if(!is.null(Tx.Labels.New))
+	{
+		if(length(Tx.Labels.New) > 0 && (length(Tx.Labels.New) == length(Txs)))
+		{
+			temp[, Tx:=factor(Tx, levels=Txs, labels=Tx.Labels.New)]
+		}
+		else
+		{
+			stop('New and old Tx Label vectors should be the same length as the Txs vector. Aborting.')
+		}
+	}
+	else
+	{
+		temp[, Tx:=factor(Tx, levels=Txs)]
+	}
+	
 	setkey(temp, Tx)
 	fit <- survfit(Surv(LD.time, LD.status) ~ Tx, data = temp)
 	labs <- getUniqueCombos(temp, c('Tx'))
 	makeComplexId(labs, c('Tx'))
-	labs$cols <- (loopingPastels(1:length(labs$cId), a=1, max.k=length(labs$cId)))
+	if(!is.null(Tx.Colors))
+	{
+		labs$cols <- Tx.Colors
+	}
+	else
+	{
+		labs$cols <- (loopingPastels(1:length(labs$cId), a=1, max.k=length(labs$cId)))
+	}
+	
 	.use.lightFont()
 	
 	if(flip)
