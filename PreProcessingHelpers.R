@@ -1474,9 +1474,14 @@ preprocessData <- function(x,
 	}
 	
 	x2 <- copy(x)
-	setnames(x2, time.col, 'Time')
 	
-	setorderv(x2, c('e.x', 'e.y', 'cId', 'Time'))
+	if(!is.null(time.col))
+	{
+		setnames(x2, time.col, 'Time')
+		time.col <- time.col
+	}
+	
+	setorderv(x2, c('e.x', 'e.y', 'cId', time.col))
 	
 	# Avoid standardizing the Id, ImRow, and ImCol etc.
 	# lapply.data.table(x, FUN=as.character, in.place=T, cols=c('Id',imageDims,labelDims))
@@ -1509,7 +1514,7 @@ preprocessData <- function(x,
 	# View(duh)
 	
 	# First reorganize, keeping ImageChannel and MaskChannel as columns for various calculations
-	x2 <- reorganize(x2, idCols=c('cId','ImageChannel','MaskChannel','Time',labelDims), measurementCols=c('Measurement'), valueCols = c('Value'), sep='.')
+	x2 <- reorganize(x2, idCols=c('cId','ImageChannel','MaskChannel',time.col,labelDims), measurementCols=c('Measurement'), valueCols = c('Value'), sep='.')
 	x2 <- removeCols(x2,c('Geometric.X','Geometric.Y')) # This data set was quantified with a previous version of FeatureExtraction that doesn't allow 'tracking' X and Y. The position is relative.
 	
 	# # Normalize standard deviation (PER CELL) and remove redundant metric of variance
@@ -1518,7 +1523,7 @@ preprocessData <- function(x,
 	# Summarize the geometric data that currently has data for each subregion of each mask.
 	if(doGeometry)
 	{
-		x2 <- summarizeGeometry(x2, cellIdCols=c('cId','Time',labelDims), removeXY=F) # Expect a warning from duplication of values (these duplicates are then removed)
+		x2 <- summarizeGeometry(x2, cellIdCols=c('cId',time.col,labelDims), removeXY=F) # Expect a warning from duplication of values (these duplicates are then removed)
 	}
 	
 	# Calculate final rotationally 'invariant' Haralick measures
@@ -1590,7 +1595,7 @@ preprocessData <- function(x,
 	##### TRANSPOSE #####
 	# Transpose data so that each row contains all data for an individual cell
 	x3 <- refactor(x3)
-	x3 <- reorganize(x3, idCols=c('cId','Time',labelDims), measurementCols=c('ImageChannel','MaskChannel'), valueCols=getAllColNamesExcept(x3, c('cId','Time','ImageChannel','MaskChannel',labelDims)), sep='.')
+	x3 <- reorganize(x3, idCols=c('cId',time.col,labelDims), measurementCols=c('ImageChannel','MaskChannel'), valueCols=getAllColNamesExcept(x3, c('cId',time.col,'ImageChannel','MaskChannel',labelDims)), sep='.')
 	
 	# Remove all columns that are ALL NON-FINITE
 	removeColsMatching(x3, col.test=function(a){all(!is.finite(a))})
@@ -1675,7 +1680,7 @@ calculateDrugSensitivityMetrics <- function(x,
 	}
 	
 	# Other Calcs
-	# setnames(x3, old=getAllColNamesExcept(x3, c('cId','Time','Period.2','Period.1',labelDims)), new=paste0('Stats.Mean.',getAllColNamesExcept(x3,c('cId','Time','Period.2','Period.1',labelDims))))
+	# setnames(x3, old=getAllColNamesExcept(x3, c('cId',time.col,'Period.2','Period.1',labelDims)), new=paste0('Stats.Mean.',getAllColNamesExcept(x3,c('cId',time.col,'Period.2','Period.1',labelDims))))
 	setorderv(x3, c(labelDims,'cId','Time'))
 	suppressWarnings(x3[, c('Nuc','Movement','Death','Phase','Death2'):=NULL])
 	suppressWarnings(x3[, Nuc:=log10(get(paste0('Stats.Mean.', nucChan, '.', maskChan)))])
@@ -1781,8 +1786,29 @@ normalizeNuc <- function(x,
 	}
 }
 
-makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, makePhase=T, makeNuc=T, makeDeath=T, save.dir, type='cmd')
+# Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
+normalizeNucFirstPeak <- function(x,
+					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}),
+					times=NULL,
+					sample.size=5000)
 {
+	data.table.plot.all(x[Tx %in% to.plot], sample.size=sample.size, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
+	peaks <- x[, getDensityPeaks(copy(Nuc), min.h=0.4, deriv.lim=1000, peak.min.sd=0.5, neighlim=20, n=1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Nuc), c(0.005, 0.995)), main=copy(.BY[[1]]))), by=c('Period.1','Tx')]
+	x[,Nuc.norm:=(Nuc-peaks[peaks$Period.1==.BY[[1]] & peaks$Tx==.BY[[2]]]$peak.x-1), by=c('Period.1','Tx')]
+	# x[Period.1 > 12, Nuc.norm:=(Nuc-peaks[peaks$Period.1==8]$peak.x-1), by=c('Period.1')]
+	if(!is.null(times))
+	{
+		data.table.plot.all(x[Time %in% times & Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.1', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+	}
+	else
+	{
+		data.table.plot.all(x[Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+	}
+}
+
+makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, TestThresh=0, makePhase=T, makeNuc=T, makeDeath=T, makeTest=F, save.dir, type='cmd', legend.args=list(), ...)
+{
+	legend.args <- merge.lists(list(bty='n'), legend.args)
 	dir.create(file.path(save.dir, 'MovieFrames'), showWarnings=F, recursive = T)
 	dir.create(file.path(save.dir, 'Movies'), showWarnings=F, recursive = T)
 	x[, Tx:=factor(Tx, levels=uniqueo(Tx))]
@@ -1790,22 +1816,47 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	.use.lightFont()
 	if(makePhase)
 	{
-		data.table.plot.all(x, xcol='Phase.norm', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir, 'MovieFrames/PhaseDist_'), v=PhaseThresh, plot.by='Period.1', xlim=c(-3,1), density.args=list(draw.area=F, lwd=2))#, xlim=c(-2.5,2.5))
+		data.table.plot.all(x, xcol='Phase.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/PhaseDist_'), v=PhaseThresh, plot.by='Period.1', xlim=c(-3,1), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)#, xlim=c(-2.5,2.5))
 		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseDist_%d.png', out.filename = 'Movies/Phase Histograms.mp4', frame.rate = 2, type=type)
 	}
 	if(makeNuc)
 	{
-		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,3), density.args=list(draw.area=F, lwd=2))
+		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,3), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
 		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = 'Movies/Nuc Histograms.mp4', frame.rate = 2, type=type)	
 	}
 	if(makeDeath)
 	{
-		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-1,1.3), density.args=list(draw.area=F, lwd=2))
+		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-1,1.3), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
 		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = 'Movies/Death Histograms.mp4', frame.rate = 2, type=type)
+	}
+	if(makeTest)
+	{
+		data.table.plot.all(x, xcol='Test.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/TestDist_'), v=TestThresh, plot.by=c('Period.1'), xlim=c(-1.5,1.5), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/TestDist_%d.png', out.filename = 'Movies/Test Histograms.mp4', frame.rate = 2, type=type)
 	}
 }
 
-plotSurvivalCurve <- function(x.surv, x, Txs=uniqueo(x$Tx), ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, Tx.Labels.New=NULL, Tx.Colors=NULL)
+makeDrugSensitivityScatterPlots <- function(x, PhaseThresh, NucThresh, DeathThresh=0, TestThresh=0, makePhase=T, makeTest=F, save.dir, type='cmd', legend.args=list(), ...)
+{
+	legend.args <- merge.lists(list(bty='n'), legend.args)
+	dir.create(file.path(save.dir, 'MovieFrames'), showWarnings=F, recursive = T)
+	dir.create(file.path(save.dir, 'Movies'), showWarnings=F, recursive = T)
+	x[, Tx:=factor(Tx, levels=uniqueo(Tx))]
+	setkey(x, Tx)
+	.use.lightFont()
+	if(makePhase)
+	{
+		data.table.plot.all(x, xcol='Phase.norm', ycol='Nuc.norm', by=c('Tx'), type='p', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/PhaseScatter_'), v=PhaseThresh, plot.by='Period.1', xlim=c(-3,1), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)#, xlim=c(-2.5,2.5))
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseScatter_%d.png', out.filename = 'Movies/Phase Histograms.mp4', frame.rate = 2, type=type)
+	}
+	if(makeTest)
+	{
+		data.table.plot.all(x, xcol='Test.norm', ycol='Nuc.norm', by=c('Tx'), type='p', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/TestScatter_'), v=TestThresh, plot.by=c('Period.1'), xlim=c(-1.5,1.5), ylim=c(-3,4), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/TestScatter_%d.png', out.filename = 'Movies/Test ScatterPlots.mp4', frame.rate = 2, type=type)
+	}
+}
+
+plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1)
 {
 	
 	pval.coord = c(0, ylim[2]*pval.y)
@@ -1848,11 +1899,26 @@ plotSurvivalCurve <- function(x.surv, x, Txs=uniqueo(x$Tx), ylab, flip=F, save.p
 	
 	if(flip)
 	{
-		daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		if(generate.labels)
+		{
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		else
+		{
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		
 	}
 	else
 	{
-		daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		if(generate.labels)
+		{
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		else
+		{
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab='Time [h]', legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
 	}
 	
 	daPlot$plot <- daPlot$plot+ 
@@ -1861,7 +1927,8 @@ plotSurvivalCurve <- function(x.surv, x, Txs=uniqueo(x$Tx), ylab, flip=F, save.p
 					   label = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
 					   size = 2.5,
 					   hjust=0)+
-		guides(colour = guide_legend(nrow = (length(Txs) %/% 4) + 1))
+		guides(colour = guide_legend(nrow = (length(Txs) %/% 3) + 1))+
+		theme(legend.text = element_text(size = legend.cex*12))
 	stats <- as.data.table(pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)$p.value, keep.rownames=T)
 	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
 	if(save.plot)
@@ -1878,6 +1945,35 @@ plotSurvivalCurve <- function(x.surv, x, Txs=uniqueo(x$Tx), ylab, flip=F, save.p
 	}
 	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot))
 }
+
+weightedMeanSubtraction <- function(x, weights, width)
+{
+	sig <- roll.gaussian(weights*x, win.width = width)
+	new.weights <- roll.gaussian(weights, win.width = width)
+	temp <- sig/new.weights
+	ret <- x-temp
+	return(ret)
+}
+
+markCrossing <- function(x, thresh, direction=c('up','down'))
+{
+	if(is.na(thresh))
+	{
+		stop('Value of thresh cannot be NA. Aborting')
+	}
+	temp <- rep(F, length(x))
+	temp[is.finite(x)] <- x[is.finite(x)] > thresh
+	if(direction=='up')
+	{
+		ret <- rollapply(temp, width=2, FUN=function(x){!x[1] & x[2]}, fill=F, align='left')
+	}
+	else
+	{
+		ret <- rollapply(temp, width=2, FUN=function(x){x[1] & !x[2]}, fill=F, align='left')
+	}
+	return(ret)
+}
+
 
 ##### Testing #####
 
