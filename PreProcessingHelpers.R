@@ -1478,7 +1478,7 @@ preprocessData <- function(x,
 	if(!is.null(time.col))
 	{
 		setnames(x2, time.col, 'Time')
-		time.col <- time.col
+		time.col <- 'Time'
 	}
 	
 	setorderv(x2, c('e.x', 'e.y', 'cId', time.col))
