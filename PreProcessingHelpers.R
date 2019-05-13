@@ -1656,7 +1656,7 @@ calculateDrugSensitivityMetrics <- function(x,
 	}
 	x3[, Time:= 0.5 + (Time-1)*0.5]
 	max.time <- max(x3$Time)
-	breaks <- merge.vectors(seq(0,max.time,2), seq(0,max.time+1,2))
+	breaks <- merge.vectors(seq(0,ceiling(max.time),2), seq(0,ceiling(max.time+1),2))
 	x3[, Period.1:=as.numeric(as.character(cut(Time, breaks=breaks, labels=breaks[2:length(breaks)], right=T)))]
 	x3[, Period.2:=as.numeric(cut(Time, breaks=c(0,8,16,24,48,96,120,max(Time)), right=T))]
 	if(max(x3$Time) <= 120)
@@ -1684,7 +1684,6 @@ calculateDrugSensitivityMetrics <- function(x,
 	setorderv(x3, c(labelDims,'cId','Time'))
 	suppressWarnings(x3[, c('Nuc','Movement','Death','Phase','Death2'):=NULL])
 	suppressWarnings(x3[, Nuc:=log10(get(paste0('Stats.Mean.', nucChan, '.', maskChan)))])
-	suppressWarnings(x3[, Phase:=log10(get(paste0('Stats.Mean.', phaseChan, '.', maskChan)))])
 	suppressWarnings(x3[, Phase:=log10(get(paste0('Stats.Mean.', phaseChan, '.', maskChan)))])
 	# x3[, Phase2:=log10(roll.mean(Stats.Mean.1.1, na.rm=T, win.width=3)), by='cId']
 	
@@ -1758,12 +1757,25 @@ getEventRecoveryStatus <- function(time, LD, n.true=3, suffix='')
 	return(ret)
 }
 
-normalizePhase <- function(x)
+normalizePhase <- function(x, pooled=F)
 {
-	peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
-	data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
-	x[, Phase.norm:=10*(Phase/peaks[peaks$Tx==.BY[[1]]]$peak.x-1), by=c('Tx')]
-	data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
+	if(pooled)
+	{
+		x[, myTempGrp:=1]
+		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='myTempGrp']
+		data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
+		x[, Phase.norm:=10*(Phase/peaks[peaks$myTempGrp==.BY[[1]]]$peak.x-1), by=c('myTempGrp')]
+		data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
+		x[, myTempGrp:=NULL]
+	}
+	else
+	{
+		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
+		data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
+		x[, Phase.norm:=10*(Phase/peaks[peaks$Tx==.BY[[1]]]$peak.x-1), by=c('Tx')]
+		data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
+	}
+	
 }
 
 # Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
@@ -1774,16 +1786,47 @@ normalizeNuc <- function(x,
 					times=NULL,
 					sample.size=5000)
 {
-	data.table.plot.all(x[Tx %in% to.plot], sample.size=sample.size, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=2), main='Nuc Standardization (Before)')
+	times <- getDefault(times, uniqueo(x$Time))
+	to.plot <- getDefault(to.plot, uniqueo(x$Tx))
+	
+	# Plot before
+	data.table.plot.all(x[Tx %in% to.plot & Time %in% times], sample.size=sample.size, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=1), main=paste('Nuc', 'Normalization (Before)'))
 	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
-	if(!is.null(times))
+	data.table.plot.all(x[Tx %in% to.plot & Time %in% times], sample.size=sample.size, xcol='Nuc.norm', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Time', alpha=1, density.args=list(draw.area=F), legend.args=list(lty=1), main=paste('Nuc', 'Normalization (After)'))
+}
+
+# Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
+normalizeToPeaks <- function(x, col, n=NA, norm.func=function(y, peak){y=log2(y/peak)}, grp.by=c('Time'), color.by=grp.by[1:max(c(1, length(grp.by)))], plot.by=NULL, plot.Txs=NULL, plot.Times=NULL)
+{
+	# Finalize parameters
+	if(is.null(grp.by))
 	{
-		data.table.plot.all(x[Time %in% times & Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Time', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+		grp.by  <- 'myTempGrp'
+		x[, myTempGrp:=1]
 	}
-	else
+	plot.Times <- getDefault(plot.Times, uniqueo(x$Time))
+	plot.Txs <- getDefault(plot.Txs, uniqueo(x$Tx))
+	
+	# Plot before
+	data.table.plot.all(x[Tx %in% plot.Txs & Time %in% plot.Times], sample.size=sample.size, xcol=col, percentile.limits=c(0.005,0.995), cumulative=F, type='d', by=grp.by[!(grp.by %in% getDefault(plot.by, c()))], line.color.by=color.by[!(color.by %in% getDefault(plot.by, c()))], plot.by=plot.by, alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=1), main=paste(col, 'Normalization (Before)'))
+	
+	# Get peaks
+	peaks <- x[, getDensityPeaks(copy(get(col)), peak.min.sd=10, neighlim=10, n=n, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(get(col)), c(0.005, 0.995)), main=paste(copy(.BY), collapse=':'))), by=grp.by]
+	
+	# Normalize to peaks
+	setkeyv(x, grp.by)
+	setkeyv(peaks, grp.by)
+	x[, c(paste0(col,'.norm')):=norm.func(copy(get(col)), peaks[.BY]$peak.x), by=grp.by]
+	
+	# Plot after
+	data.table.plot.all(x[Tx %in% plot.Txs & Time %in% plot.Times], sample.size=sample.size, xcol=paste0(col, '.norm'), percentile.limits=c(0.005,0.995), cumulative=F, type='d', by=grp.by[!(grp.by %in% getDefault(plot.by, c()))], line.color.by=color.by[!(color.by %in% getDefault(plot.by, c()))], plot.by=plot.by, alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=1), main=paste(col, 'Normalization (After)'))
+	
+	# Fix temp column if necessary
+	if(all(grp.by=='myTempGrp'))
 	{
-		data.table.plot.all(x[Tx %in% to.plot], sample.size=5000, percentile.limits=c(0.005,0.995), cumulative=F, xcol='Nuc.norm', type='d', by='Period.2', alpha=1, density.args=list(draw.area=F), main='Nuc Standardization (After)')
+		x[, myTempGrp:=NULL]
 	}
+	
 }
 
 # Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
