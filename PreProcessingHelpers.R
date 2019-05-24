@@ -538,6 +538,10 @@ robustScale <- function(x, use.median, use.mad, use.percentiles=F, percentiles=c
 	{
 		l(lo, hi) %=% getPercentileValues(x[is.finite(x)], c(percentiles[1],percentiles[2]))
 		l(daMin, daMax) %=% qnorm(percentiles)
+		if(any(!is.finite(c(lo, hi, daMin, daMax))))
+		{
+			stop(c("Couldn't calculate the percentile limits... ", c(lo, hi, daMin, daMax)))
+		}
 		return(adjustIntensity(x, lo, hi, daMin, daMax))
 	}
 	else
@@ -1683,8 +1687,8 @@ calculateDrugSensitivityMetrics <- function(x,
 	# setnames(x3, old=getAllColNamesExcept(x3, c('cId',time.col,'Period.2','Period.1',labelDims)), new=paste0('Stats.Mean.',getAllColNamesExcept(x3,c('cId',time.col,'Period.2','Period.1',labelDims))))
 	setorderv(x3, c(labelDims,'cId','Time'))
 	suppressWarnings(x3[, c('Nuc','Movement','Death','Phase','Death2'):=NULL])
-	suppressWarnings(x3[, Nuc:=log10(get(paste0('Stats.Mean.', nucChan, '.', maskChan)))])
-	suppressWarnings(x3[, Phase:=log10(get(paste0('Stats.Mean.', phaseChan, '.', maskChan)))])
+	suppressWarnings(x3[, Nuc:=logicle(get(paste0('Stats.Mean.', nucChan, '.', maskChan)), base=2, transition=1, tickSep=100)])
+	suppressWarnings(x3[, Phase:=logicle(get(paste0('Stats.Mean.', phaseChan, '.', maskChan)), base=2, transition=1, tickSep=100)])
 	# x3[, Phase2:=log10(roll.mean(Stats.Mean.1.1, na.rm=T, win.width=3)), by='cId']
 	
 	setorderv(x3, c(labelDims, 'cId', 'Time'))
@@ -1779,23 +1783,6 @@ normalizePhase <- function(x, pooled=F)
 }
 
 # Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
-normalizeNuc <- function(x,
-					nuc.lo,
-					nuc.hi,
-					to.plot=getDefault(uniqueo(x$Tx)[grepl('Veh', uniqueo(x$Tx), fixed=T)][1], uniqueo(x$Tx)[1], test=function(blah){is.null(blah) || !is.finite(blah)}),
-					times=NULL,
-					sample.size=5000)
-{
-	times <- getDefault(times, uniqueo(x$Time))
-	to.plot <- getDefault(to.plot, uniqueo(x$Tx))
-	
-	# Plot before
-	data.table.plot.all(x[Tx %in% to.plot & Time %in% times], sample.size=sample.size, xcol='Nuc', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Period.2', alpha=0.2, density.args=list(draw.area=F), legend.args=list(lty=1), main=paste('Nuc', 'Normalization (Before)'))
-	standardizeWideData(x, suffix='norm', data.cols=c('Nuc'), na.rm.no.variance.cols=T, col.use.percentiles=T, percentiles=c(nuc.lo,nuc.hi), by=c('Time'))
-	data.table.plot.all(x[Tx %in% to.plot & Time %in% times], sample.size=sample.size, xcol='Nuc.norm', percentile.limits=c(0.005,0.995), cumulative=F, type='d', by='Time', alpha=1, density.args=list(draw.area=F), legend.args=list(lty=1), main=paste('Nuc', 'Normalization (After)'))
-}
-
-# Standardize Nuclear Signal at each timepoint to account for drift in labeling intensity.
 normalizeToPeaks <- function(x, col, n=NA, norm.func=function(y, peak){y=log2(y/peak)}, grp.by=c('Time'), color.by=grp.by[1:max(c(1, length(grp.by)))], plot.by=NULL, plot.Txs=NULL, plot.Times=NULL)
 {
 	# Finalize parameters
@@ -1849,7 +1836,7 @@ normalizeNucFirstPeak <- function(x,
 	}
 }
 
-makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, TestThresh=0, makePhase=T, makeNuc=T, makeDeath=T, makeTest=F, save.dir, type='cmd', legend.args=list(), ...)
+makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh=0, TestThresh=0, makePhase=T, makeNuc=T, makeDeath=T, makeTest=F, save.dir, file.prefix='', type='cmd', legend.args=list(), ...)
 {
 	legend.args <- merge.lists(list(bty='n'), legend.args)
 	dir.create(file.path(save.dir, 'MovieFrames'), showWarnings=F, recursive = T)
@@ -1860,22 +1847,22 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	if(makePhase)
 	{
 		data.table.plot.all(x, xcol='Phase.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/PhaseDist_'), v=PhaseThresh, plot.by='Period.1', xlim=c(-3,1), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)#, xlim=c(-2.5,2.5))
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseDist_%d.png', out.filename = 'Movies/Phase Histograms.mp4', frame.rate = 2, type=type)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/PhaseDist_%d.png', out.filename = paste0('Movies/', file.prefix, 'Phase Histograms.mp4'), frame.rate = 2, type=type)
 	}
 	if(makeNuc)
 	{
 		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,3), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = 'Movies/Nuc Histograms.mp4', frame.rate = 2, type=type)	
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = paste0('Movies/', file.prefix, 'Nuc Histograms.mp4'), frame.rate = 2, type=type)	
 	}
 	if(makeDeath)
 	{
 		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-1,1.3), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = 'Movies/Death Histograms.mp4', frame.rate = 2, type=type)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = paste0('Movies/', file.prefix, 'Death Histograms.mp4'), frame.rate = 2, type=type)
 	}
 	if(makeTest)
 	{
 		data.table.plot.all(x, xcol='Test.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/TestDist_'), v=TestThresh, plot.by=c('Period.1'), xlim=c(-1.5,1.5), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
-		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/TestDist_%d.png', out.filename = 'Movies/Test Histograms.mp4', frame.rate = 2, type=type)
+		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/TestDist_%d.png', out.filename = paste0('Movies/', file.prefix, 'Test Histograms.mp4'), frame.rate = 2, type=type)
 	}
 }
 
@@ -1986,7 +1973,7 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 		print(daPlot)
 		print(stats)
 	}
-	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot))
+	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot, fit=fit))
 }
 
 weightedMeanSubtraction <- function(x, weights, width)
