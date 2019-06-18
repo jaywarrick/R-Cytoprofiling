@@ -461,6 +461,7 @@ summarizeSymmetryData <- function(x, sim.trans=T, logit.trans=T)
 	x[, SymmetryLobe.3:=SymmetryAmplitude.3*SymmetryCorrelation.3.Avg]
 	x[, SymmetryLobe.4:=SymmetryAmplitude.4*SymmetryCorrelation.4.Avg]
 	correlationNames <- c(getColNamesContaining(x,'SymmetryCorrelation'), getColNamesContaining(x,'SymmetryLobe'))
+	correlationNames <- correlationNames[!grepl('Similarity',correlationNames)]
 	if(length(correlationNames) > 0 & sim.trans)
 	{
 		lapply.data.table(x, FUN=sim.transform, cols=correlationNames, in.place=T)
