@@ -1852,12 +1852,12 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	}
 	if(makeNuc)
 	{
-		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,3), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
+		data.table.plot.all(x, xcol='Nuc.norm', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir, 'MovieFrames/NucDist_'), v=NucThresh, plot.by=c('Period.1'), xlim=c(-3,8), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
 		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/NucDist_%d.png', out.filename = paste0('Movies/', file.prefix, 'Nuc Histograms.mp4'), frame.rate = 2, type=type)	
 	}
 	if(makeDeath)
 	{
-		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-1,1.3), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
+		data.table.plot.all(x, xcol='Death', by=c('Tx'), type='d', save.plot=T, main.show=F, time.stamp.plot=T, save.by.index=T, mar=c(4,4,1,1), mgp=c(2.7,1,0), save.file=file.path(save.dir,'MovieFrames/DeathDist_'), v=DeathThresh, plot.by=c('Period.1'), xlim=c(-3,5), density.args=list(draw.area=F, lwd=2), legend.args=legend.args, ...)
 		makeMovie(full.dir.path=save.dir, in.filename='MovieFrames/DeathDist_%d.png', out.filename = paste0('Movies/', file.prefix, 'Death Histograms.mp4'), frame.rate = 2, type=type)
 	}
 	if(makeTest)
