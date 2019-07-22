@@ -1739,27 +1739,38 @@ getEventRecoveryStatus <- function(time, LD, n.true=3, suffix='')
 	DL <- rollapply(!LD, width=n.true, FUN=sum, na.rm=T, partial=T, align='left')
 	deathEvent <- which(LD==n.true)
 	lifeEvent <- which(DL==n.true)
-	if(length(deathEvent)==0 | length(lifeEvent)==0)
+	if(length(lifeEvent)==0)
 	{
-		# The event never happened
-		ret <- list(LD.time=time[length(time)], LD.status=0)
+		# Then we never lived to begin with
+		ret <- list(LD.time=time[length(time)], LD.status=NA)
+		names(ret) <- paste0(names(ret), suffix)
+		return(ret)
+	}
+	if(length(deathEvent)==0)
+	{
+		# Then there was never a death to recover from
+		ret <- list(LD.time=time[length(time)], LD.status=NA)
+		names(ret) <- paste0(names(ret), suffix)
+		return(ret)
+	}
+	#  Otherwise, there was at least one death event and we should
+	#  get any life event that occurs after the first death event.
+	recoveryEvent <- lifeEvent[lifeEvent > deathEvent[1]]
+	if(length(recoveryEvent)==0)
+	{
+		# There was never any life/recovery event after the death event
+		ret <- list(LD.time=time[length(time)], LD.status=F)
 		names(ret) <- paste0(names(ret), suffix)
 		return(ret)
 	}
 	else
 	{
-		recoveryEvent <- lifeEvent[lifeEvent > deathEvent[1]]
-		if(length(recoveryEvent)==0)
-		{
-			# The event never happened
-			ret <- list(LD.time=time[length(time)], LD.status=0)
-			names(ret) <- paste0(names(ret), suffix)
-			return(ret)
-		}
+		# we found a recovery event
+		ret <- list(LD.time=time[recoveryEvent[1]], LD.status=T)
+		names(ret) <- paste0(names(ret), suffix)
+		return(ret)
 	}
-	ret <- list(LD.time=time[recoveryEvent[1]], LD.status=1)
-	names(ret) <- paste0(names(ret), suffix)
-	return(ret)
+	
 }
 
 normalizePhase <- function(x, pooled=F)
