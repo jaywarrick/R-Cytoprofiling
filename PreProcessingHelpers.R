@@ -1701,6 +1701,39 @@ calculateDrugSensitivityMetrics <- function(x,
 	return(x3)
 }
 
+# Set NucThresh
+getThresholds <- function(x, col, num.clusters=3, starts=NULL, starts.percentile=NULL, seed=1234, p.clust=0.95, p.rel=0.95, periods.clust=1:10, periods.rel=1:3, clust.filter.fun=function(x){T}, sample.size=10000)
+{
+	temp <- x[clust.filter.fun(x)][Period.1 %in% uniqueo(Period.1)[periods.clust]][[col]]
+	Clust <- assignToClusters(my.sample(temp, sample.size, seed=seed), 
+						 nClusters=num.clusters, 
+						 starts=starts,
+						 starts.percentile=getDefault(starts.percentile, seq(0.15,0.85,length.out=num.clusters)),
+						 rndSeed=seed)
+	
+	da.med <- median(temp)
+	if(p.clust >= 0.5)
+	{
+		Thresh.p <- da.med + qnorm(p.clust)*sd.robust(c(temp[temp <= da.med], -1*temp[temp < da.med])) # Reflect data around median from appropriate side to get an estimate of the sd that ignores outliers
+	}
+	else
+	{
+		Thresh.p <- da.med + qnorm(p.clust)*sd.robust(c(temp[temp >= da.med], -1*temp[temp > da.med])) # Reflect data around median from appropriate side to get an estimate of the sd that ignores outliers
+	}
+	
+	x[, c(paste0(col, '.rel')):=get(col)-median(get(col)[Period.1 %in% uniqueo(Period.1)[periods.rel]]), by='cId']
+	temp <- x[my.sample.int(.N, n, seed=1237)][Period.1 %in% uniqueo(Period.1)[periods.rel]][[paste0(col, '.rel')]]
+	hist(temp, breaks=100, xlab=paste0(col, '.rel'), main=paste0(col, '.rel'))
+	Thresh.rel <- qnorm(p.rel, mean=0, sd=sd.robust(temp))
+	abline(v=c(Thresh.rel, -Thresh.rel), lwd=3, col='gray40', lty=2)
+	
+	plotClusters(Clust$data$x, Clust$data$Cluster.Clean, breaks=100, main=col, xlab=col)
+	# Nuc.Peaks <- getDensityPeaks(sample(x3[Period.1 %in% uniqueo(Period.1)[periods] & Nuc > 0]$Nuc.norm, 5000), valleys=T, min.h=0.01, neighlim=10, nearestTo=1.1, make.plot = T)
+	abline(v=as.numeric(Clust$thresh), lwd=3, col='gray40', lty=2)
+	abline(v=Thresh.p, lwd=1, col='gray40', lty=1)
+	return(list(Thresh.clust=as.numeric(Clust$thresh), Thresh.p=Thresh.p, Thresh.rel=Thresh.rel))
+}
+
 getEventStatus <- function(time, LD, n.true=3, suffix='')
 {
 	if(!is.logical(LD))
@@ -1900,11 +1933,16 @@ makeDrugSensitivityScatterPlots <- function(x, PhaseThresh, NucThresh, DeathThre
 
 plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1)
 {
-	
+	# Determine where to plot the global p-value
 	pval.coord = c(0, ylim[2]*pval.y)
 	
+	# Get rid of cells that start out dead
 	temp <- x.surv[!(LD.time==min(LD.time) & LD.status==1)]
+	
+	# Just plot the specified Txs
 	temp <- temp[Tx %in% Txs]
+	
+	# Calculate initial viabilities (from raw data)
 	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
 	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
 	inits[, txt2:=paste(txt,'%', sep='')]
@@ -1924,6 +1962,7 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 		temp[, Tx:=factor(Tx, levels=Txs)]
 	}
 	
+	# Get survival curves
 	setkey(temp, Tx)
 	fit <- survfit(Surv(LD.time, LD.status) ~ Tx, data = temp)
 	labs <- getUniqueCombos(temp, c('Tx'))
@@ -1939,6 +1978,7 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	
 	.use.lightFont()
 	
+	# Generate the survival curves, inverting probabilities if desired
 	if(flip)
 	{
 		if(generate.labels)
@@ -1963,6 +2003,7 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 		}
 	}
 	
+	# Plot the curves
 	daPlot$plot <- daPlot$plot+ 
 		ggplot2::annotate("text", 
 					   x = min(x$Time), y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
@@ -1973,6 +2014,8 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 		theme(legend.text = element_text(size = legend.cex*12))
 	stats <- as.data.table(pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)$p.value, keep.rownames=T)
 	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
+	
+	# Save/show the plots
 	if(save.plot)
 	{
 		fwrite(stats, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - pvalues.csv')))
@@ -1985,6 +2028,8 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 		print(daPlot)
 		print(stats)
 	}
+	
+	# Return statistics, plots, and fits
 	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot, fit=fit))
 }
 
