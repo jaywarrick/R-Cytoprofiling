@@ -1705,6 +1705,9 @@ calculateDrugSensitivityMetrics <- function(x,
 getThresholds <- function(x, col, num.clusters=3, starts=NULL, starts.percentile=NULL, seed=1234, p.clust=0.95, p.rel=0.95, periods.clust=1:10, periods.rel=1:3, clust.filter.fun=function(x){T}, sample.size=10000)
 {
 	temp <- x[clust.filter.fun(x)][Period.1 %in% uniqueo(Period.1)[periods.clust]][[col]]
+	temp.sample <- uniqueo(my.sample(temp, sample.size, seed=seed))
+	starts[starts < temp.sample[2]] <- temp.sample[2]
+	starts[starts > temp.sample[length(temp.sample)-1]] <- temp.sample[length(temp.sample)-1]
 	Clust <- assignToClusters(my.sample(temp, sample.size, seed=seed), 
 						 nClusters=num.clusters, 
 						 starts=starts,
@@ -1722,7 +1725,7 @@ getThresholds <- function(x, col, num.clusters=3, starts=NULL, starts.percentile
 	}
 	
 	x[, c(paste0(col, '.rel')):=get(col)-median(get(col)[Period.1 %in% uniqueo(Period.1)[periods.rel]]), by='cId']
-	temp <- x[my.sample.int(.N, n, seed=1237)][Period.1 %in% uniqueo(Period.1)[periods.rel]][[paste0(col, '.rel')]]
+	temp <- x[my.sample.int(.N, sample.size, seed=1237)][Period.1 %in% uniqueo(Period.1)[periods.rel]][[paste0(col, '.rel')]]
 	hist(temp, breaks=100, xlab=paste0(col, '.rel'), main=paste0(col, '.rel'))
 	Thresh.rel <- qnorm(p.rel, mean=0, sd=sd.robust(temp))
 	abline(v=c(Thresh.rel, -Thresh.rel), lwd=3, col='gray40', lty=2)
@@ -1731,7 +1734,7 @@ getThresholds <- function(x, col, num.clusters=3, starts=NULL, starts.percentile
 	# Nuc.Peaks <- getDensityPeaks(sample(x3[Period.1 %in% uniqueo(Period.1)[periods] & Nuc > 0]$Nuc.norm, 5000), valleys=T, min.h=0.01, neighlim=10, nearestTo=1.1, make.plot = T)
 	abline(v=as.numeric(Clust$thresh), lwd=3, col='gray40', lty=2)
 	abline(v=Thresh.p, lwd=1, col='gray40', lty=1)
-	return(list(Thresh.clust=as.numeric(Clust$thresh), Thresh.p=Thresh.p, Thresh.rel=Thresh.rel))
+	return(list(Thresh.clust=as.numeric(Clust$thresh), Thresh.p=Thresh.p, Thresh.rel=Thresh.rel, mu.clust=as.numeric(Clust$mu)))
 }
 
 getEventStatus <- function(time, LD, n.true=3, suffix='')
@@ -1964,9 +1967,12 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	
 	# Get survival curves
 	setkey(temp, Tx)
-	fit <- survfit(Surv(LD.time, LD.status) ~ Tx, data = temp)
-	labs <- getUniqueCombos(temp, c('Tx'))
-	makeComplexId(labs, c('Tx'))
+	rhs <- names(x.surv)[!names(x.surv) %in% c('cId','LD.time','LD.status')]
+	f <- makeBasicFormula('Surv(LD.time, LD.status)', rhs)
+	fit <- do.call(survfit, args=list(formula=f, data=temp))
+	# fit <- survfit(makeBasicFormula('Surv(LD.time, LD.status)', rhs), data = temp)
+	labs <- getUniqueCombos(temp, rhs)
+	makeComplexId(labs, rhs)
 	if(!is.null(Tx.Colors))
 	{
 		labs$cols <- Tx.Colors
