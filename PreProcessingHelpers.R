@@ -1695,8 +1695,8 @@ calculateDrugSensitivityMetrics <- function(x,
 	setorderv(x3, c(labelDims, 'cId', 'Time'))
 	
 	# Create Plasma, Neg, and Drug columns if necessary
-	x3[, P:=grepl('.P',Tx,fixed=T)]
-	x3[, Neg:=grepl('.Neg',Tx,fixed=T)]
+	x3[, P:=grepl(P.string,Tx,fixed=T)]
+	x3[, Neg:=grepl(Neg.string,Tx,fixed=T)]
 	
 	return(x3)
 }
