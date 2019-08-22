@@ -1663,7 +1663,7 @@ calculateDrugSensitivityMetrics <- function(x,
 	max.time <- max(x3$Time)
 	breaks <- merge.vectors(seq(0,ceiling(max.time),2), seq(0,ceiling(max.time+1),2))
 	x3[, Period.1:=as.numeric(as.character(cut(Time, breaks=breaks, labels=breaks[2:length(breaks)], right=T)))]
-	x3[, Period.2:=as.numeric(cut(Time, breaks=c(0,8,16,24,48,96,120,max(Time)), right=T))]
+	x3[, Period.2:=as.numeric(cut(Time, breaks=uniqueo(c(0,8,16,24,48,96,120,max(Time))), right=T))]
 	if(max(x3$Time) <= 120)
 	{
 		x3[, Period.2:=factor(Period.2, levels=1:6, labels=c('0-8','8-16','16-24','24-48','48-96','96-120'))]
