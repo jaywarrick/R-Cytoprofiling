@@ -1934,7 +1934,7 @@ makeDrugSensitivityScatterPlots <- function(x, PhaseThresh, NucThresh, DeathThre
 	}
 }
 
-plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1)
+plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1, conf.int=F)
 {
 	# Determine where to plot the global p-value
 	pval.coord = c(0, ylim[2]*pval.y)
@@ -1989,11 +1989,11 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	{
 		if(generate.labels)
 		{
-			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
 		}
 		else
 		{
-			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
 		}
 		
 	}
@@ -2001,11 +2001,11 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	{
 		if(generate.labels)
 		{
-			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
 		}
 		else
 		{
-			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = T, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
 		}
 	}
 	
