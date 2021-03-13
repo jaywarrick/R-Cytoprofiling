@@ -1968,8 +1968,8 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	# Get survival curves
 	setkey(temp, Tx)
 	rhs <- names(x.surv)[!names(x.surv) %in% c('cId','LD.time','LD.status')]
-	f <- makeBasicFormula('Surv(LD.time, LD.status)', rhs)
-	fit <- do.call(survfit, args=list(formula=f, data=temp))
+	my.f <- makeBasicFormula('Surv(LD.time, LD.status)', rhs)
+	fit <- do.call(survfit, args=list(formula=my.f, data=temp))
 	# fit <- survfit(makeBasicFormula('Surv(LD.time, LD.status)', rhs), data = temp)
 	labs <- getUniqueCombos(temp, rhs)
 	makeComplexId(labs, rhs)
@@ -2018,7 +2018,107 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 					   hjust=0)+
 		guides(colour = guide_legend(nrow = (length(Txs) %/% 3) + 1))+
 		theme(legend.text = element_text(size = legend.cex*12))
-	stats <- as.data.table(pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)$p.value, keep.rownames=T)
+	stats <- as.data.table(pairwise_survdiff(my.f, data = temp)$p.value, keep.rownames=T)
+	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
+	
+	# Save/show the plots
+	if(save.plot)
+	{
+		fwrite(stats, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - pvalues.csv')))
+		png(file.path(save.dir, save.file), res=300, units='in', width=width, height=height)
+		print(daPlot)
+		dev.off()
+	}
+	else
+	{
+		print(daPlot)
+		print(stats)
+	}
+	
+	# Return statistics, plots, and fits
+	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot, fit=fit))
+}
+
+plotConsolidatedSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1, conf.int=F)
+{
+	# Determine where to plot the global p-value
+	pval.coord = c(0, ylim[2]*pval.y)
+	
+	# Get rid of cells that start out dead
+	temp <- x.surv[!(LD.time==min(LD.time) & LD.status==1)]
+	
+	# Just plot the specified Txs
+	temp <- temp[Tx %in% Txs]
+	
+	# Calculate initial viabilities (from raw data)
+	# inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
+	# paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
+	# inits[, txt2:=paste(txt,'%', sep='')]
+	if(!is.null(Tx.Labels.New))
+	{
+		if(length(Tx.Labels.New) > 0 && (length(Tx.Labels.New) == length(Txs)))
+		{
+			temp[, Tx:=factor(Tx, levels=Txs, labels=Tx.Labels.New)]
+		}
+		else
+		{
+			stop('New and old Tx Label vectors should be the same length as the Txs vector. Aborting.')
+		}
+	}
+	else
+	{
+		temp[, Tx:=factor(Tx, levels=Txs)]
+	}
+	
+	# Get survival curves
+	setkey(temp, Tx)
+	rhs <- names(x.surv)[!names(x.surv) %in% c('cId','LD.time','LD.status')]
+	my.f <- makeBasicFormula('Surv(LD.time, LD.status)', rhs)
+	fit <- do.call(survfit, args=list(formula=my.f, data=temp))
+	# fit <- survfit(makeBasicFormula('Surv(LD.time, LD.status)', rhs), data = temp)
+	labs <- getUniqueCombos(temp, rhs)
+	makeComplexId(labs, rhs)
+	if(!is.null(Tx.Colors))
+	{
+		labs$cols <- Tx.Colors
+	}
+	else
+	{
+		labs$cols <- (loopingPastels(1:length(labs$cId), a=1, max.k=length(labs$cId)))
+	}
+	
+	.use.lightFont()
+
+	# Generate the survival curves, inverting probabilities if desired
+	if(flip)
+	{
+		if(generate.labels)
+		{
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		else
+		{
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		
+	}
+	else
+	{
+		if(generate.labels)
+		{
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		else
+		{
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+	}
+	
+	# Plot the curves
+	daPlot$plot <- daPlot$plot +
+		guides(colour = guide_legend(nrow = (length(Txs) %/% 3) + 1))+
+		theme(legend.text = element_text(size = legend.cex*12))
+	stats <- as.data.table(pairwise_survdiff(my.f, data = temp)$p.value, keep.rownames=T)
 	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
 	
 	# Save/show the plots
