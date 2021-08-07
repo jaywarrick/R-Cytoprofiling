@@ -25,6 +25,18 @@ browseShinyData <- function()
 
 ##### General #####
 
+if.else <- function(condition, if.true, if.false)
+{
+	if(condition)
+	{
+		return(if.true)
+	}
+	else
+	{
+		return(if.false)
+	}
+}
+
 resample <- function(x, ...)
 {
 	x[sample.int(length(x), ...)]
@@ -1633,11 +1645,11 @@ calculateDrugSensitivityMetrics <- function(x,
 		stop('Old and new treatement names need to be vectors of the same length. Aborting.')
 	}
 	
-	if(length(oldTxs > 0))
+	if(length(oldTxs) > 0)
 	{
 		if(!all(oldTxs %in% unique(x$Tx)))
 		{
-			warning(paste0('Some of the old Tx names do not exist in the table (', paste(oldTxs[!(oldTxs %in% unique(x$Tx))], collapse=',')))
+			warning(paste0('Some of the old Tx names do not exist in the table - ', paste(oldTxs[!(oldTxs %in% unique(x$Tx))], collapse=',')))
 		}
 	}
 	
@@ -1809,12 +1821,12 @@ getEventRecoveryStatus <- function(time, LD, n.true=3, suffix='')
 	
 }
 
-normalizePhase <- function(x, pooled=F)
+normalizePhase <- function(x, pooled=F, n=-1, peak.npos=10, peak.min.sd=0.5)
 {
 	if(pooled)
 	{
 		x[, myTempGrp:=1]
-		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='myTempGrp']
+		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=peak.min.sd, peak.npos=peak.npos, neighlim=10, n=n, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='myTempGrp']
 		data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
 		x[, Phase.norm:=10*(Phase/peaks[peaks$myTempGrp==.BY[[1]]]$peak.x-1), by=c('myTempGrp')]
 		data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
@@ -1822,7 +1834,7 @@ normalizePhase <- function(x, pooled=F)
 	}
 	else
 	{
-		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
+		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=peak.min.sd, peak.npos=peak.npos, neighlim=10, n=n, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
 		data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
 		x[, Phase.norm:=10*(Phase/peaks[peaks$Tx==.BY[[1]]]$peak.x-1), by=c('Tx')]
 		data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
@@ -1916,6 +1928,7 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 
 plotSurvivalCurves <- function(birth, death, x, by,  Txs=uniqueo(x[['Tx']]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.dir, save.file='Survival Plot.png', xlim=c(0,50), ylim=c(0,1), stats.show=T, stats.y=0.8, viability.y=0.5, pval.y=0.2, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, legend.title.birth=paste(by, collapse=':'), legend.title.death=paste(by, collapse=':'), Tx.Colors=NULL, legend.cex=1, conf.int=F, table.offsets=c(2,-0.05,2,0.05), table.spacing=0.04)
 {
+
   # Create a copy so we don't alter the original data
   birth2 <- copy(birth)
   death2 <- copy(death)
@@ -1949,18 +1962,19 @@ plotSurvivalCurves <- function(birth, death, x, by,  Txs=uniqueo(x[['Tx']]), yla
   # Get survival curves
   setorderv(birth2, cols=c(by,'LD.time'))
   setorderv(death2, cols=c(by,'LD.time'))
-  l(temp.birth, sc.birth, sc.step.birth, stats.birth, stats.sym.birth, fw.table.birth, fit.birth, p.val.birth, p.val.trend.birth, my.f, rhs) %=% getSurvivalCurves(birth2, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status', na.val=as.character(NA))
-  l(temp.death, sc.death, sc.step.death, stats.death, stats.sym.death, fw.table.death, fit.death, p.val.death, p.val.trend.death, my.f, rhs) %=% getSurvivalCurves(death2, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status', na.val=as.character(NA))
+
+  l(temp.birth, sc.birth, sc.step.birth, stats.birth, stats.sym.birth, fw.table.birth, fit.birth, p.val.birth, p.val.trend.birth, my.f, rhs) %=% getSurvivalCurves(birth2, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status', na.val=as.character(NA), ignore.first=F)
+  l(temp.death, sc.death, sc.step.death, stats.death, stats.sym.death, fw.table.death, fit.death, p.val.death, p.val.trend.death, my.f, rhs) %=% getSurvivalCurves(death2, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status', na.val=as.character(NA), ignore.first=T)
   
   # Calculate initial viabilities (from raw data)
-  inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
+  inits <- x[Time == uniqueo(Time)[2], list(L=sum(Death.status.init=='LIVE'), N=.N, init.viability=round(100*sum(Death.status.init=='LIVE')/.N, 0)), by=c('Tx','Time')]
   paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
   inits[, txt2:=paste(txt,'%', sep='')]
   
   if(save.plot)
   {
-    fwrite(stats.birth, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - birth - pvalues.csv')))
-    fwrite(stats.death, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - death - pvalues.csv')))
+    # fwrite(stats.birth, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - birth - pvalues.csv')))
+    # fwrite(stats.death, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - death - pvalues.csv')))
     cairo_pdf(filename=save.file, width=width, height=height) #, res=300, units='in')
     .use.lightFont('Calibri Light')
   }
@@ -2007,6 +2021,15 @@ plotSurvivalCurves <- function(birth, death, x, by,  Txs=uniqueo(x[['Tx']]), yla
                       cex.axis=1.5,
                       add=T)
   abline(h=1, lty=2, col='black', lwd=2)
+  temp <- copy(sc.step.birth)
+  setnames(temp, old=c('surv','upper','lower'), new=c('birth','birth.upper','birth.lower'))
+  sc.step.death[temp, c('birth', 'birth.upper','birth.lower'):=list(birth, birth.upper, birth.lower), on=c('Tx','LD.time')]
+  # TODO Fill in missing values with previous value for birth and death
+  # lapply.data.table(sc.step.death, FUN=function(x){x[is.na(x)] <- 1; return(x)}, cols=c('birth'), by=c('Tx','LD.time'), in.place = T)
+  # lapply.data.table(sc.step.death, FUN=function(x){x[is.na(x)] <- 0; return(x)}, cols=c('birth.upper','birth.lower'), by=c('Tx','LD.time'), in.place = T)
+  sc.step.death[, c('total','total.upper','total.lower'):=list(surv+(1-birth), sqrt(upper^2+birth.upper^2), sqrt(lower^2+birth.lower^2)), by=c('Tx','LD.time')]
+  
+  
   if(stats.show)
   {
     if(!is.null(birth) && !is.na(table.offsets[1]) && !is.na(table.offsets[2]))
@@ -2035,6 +2058,37 @@ plotSurvivalCurves <- function(birth, death, x, by,  Txs=uniqueo(x[['Tx']]), yla
   {
     dev.off()
   }
+  
+  if(save.plot)
+  {
+  	fwrite(stats.birth, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - birth - pvalues.csv')))
+  	fwrite(stats.death, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - death - pvalues.csv')))
+  	cairo_pdf(filename=paste(strsplit(save.file, '.', fixed=T)[[1]][1], '_total.pdf'), width=width, height=height) #, res=300, units='in')
+  	.use.lightFont('Calibri Light')
+  }
+  data.table.plot.all(sc.step.death[!is.na(total)],
+  				xcol='LD.time',
+  				ycol='total',
+  				errcol.upper='total.upper',
+  				errcol.lower = 'total.lower',
+  				by=by,
+  				type='l',
+  				xlim=xlim,
+  				ylim=c(0,1.2),
+  				mar=c(4,4,1,1),
+  				mgp=c(2.7,1,0),
+  				xlab=xlab,
+  				ylab='Total Cell Number',
+  				legend.args=merge.lists(legend.args, list(title='Tx Group')),
+  				cex.lab=1.5,
+  				cex.axis=1.5,
+  				add=F)
+  # Save/show the plots
+  if(save.plot)
+  {
+  	dev.off()
+  }
+  
   cat("\nProliferation:\n")
   print(stats.sym.birth)
   cat("\nDeath:\n")
