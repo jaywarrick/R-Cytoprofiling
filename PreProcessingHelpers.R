@@ -25,18 +25,6 @@ browseShinyData <- function()
 
 ##### General #####
 
-if.else <- function(condition, if.true, if.false)
-{
-	if(condition)
-	{
-		return(if.true)
-	}
-	else
-	{
-		return(if.false)
-	}
-}
-
 resample <- function(x, ...)
 {
 	x[sample.int(length(x), ...)]
