@@ -25,6 +25,18 @@ browseShinyData <- function()
 
 ##### General #####
 
+if.else <- function(condition, if.true, if.false)
+{
+	if(condition)
+	{
+		return(if.true)
+	}
+	else
+	{
+		return(if.false)
+	}
+}
+
 resample <- function(x, ...)
 {
 	x[sample.int(length(x), ...)]
@@ -1489,11 +1501,12 @@ calculateDrugSensitivityMetrics <- function(x,
 		stop('Old and new treatement names need to be vectors of the same length. Aborting.')
 	}
 
-	if(length(oldTxs > 0))
+
+	if(length(oldTxs) > 0)
 	{
 		if(!all(oldTxs %in% unique(x$Tx)))
 		{
-			warning(paste0('Some of the old Tx names do not exist in the table (', paste(oldTxs[!(oldTxs %in% unique(x$Tx))], collapse=',')))
+			warning(paste0('Some of the old Tx names do not exist in the table - ', paste(oldTxs[!(oldTxs %in% unique(x$Tx))], collapse=',')))
 		}
 	}
 
@@ -1665,12 +1678,12 @@ getEventRecoveryStatus <- function(time, LD, n.true=3, suffix='')
 
 }
 
-normalizePhase <- function(x, pooled=F)
+normalizePhase <- function(x, pooled=F, n=-1, peak.npos=10, peak.min.sd=0.5)
 {
 	if(pooled)
 	{
 		x[, myTempGrp:=1]
-		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='myTempGrp']
+		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=peak.min.sd, peak.npos=peak.npos, neighlim=10, n=n, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='myTempGrp']
 		data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
 		x[, Phase.norm:=10*(Phase/peaks[peaks$myTempGrp==.BY[[1]]]$peak.x-1), by=c('myTempGrp')]
 		data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
@@ -1678,7 +1691,7 @@ normalizePhase <- function(x, pooled=F)
 	}
 	else
 	{
-		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=10, neighlim=10, n=-1, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
+		peaks <- x[Period.1 %in% uniqueo(Period.1)[1:2], getDensityPeaks(copy(Phase), peak.min.sd=peak.min.sd, peak.npos=peak.npos, neighlim=10, n=n, make.plot=T, plot.args=list(ylim=c(0,5), xlim=getPercentileValues(copy(Phase), c(0.005, 0.995)), main=copy(.BY[[1]]))), by='Tx']
 		data.table.plot.all(x3[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase', type='d', by='Tx', density.args=list(draw.area=F, lwd=2), legend.args=list(lty=2), main='Phase Normalization (Before)')
 		x[, Phase.norm:=10*(Phase/peaks[peaks$Tx==.BY[[1]]]$peak.x-1), by=c('Tx')]
 		data.table.plot.all(x[Period.1 %in% uniqueo(Period.1)[1:2]], percentile.limits=c(0.005, 0.995, 0, 1), xcol='Phase.norm', type='d', by='Tx', density.args=list(draw.area=F), alpha=1, main='Phase Normalization (After)')
@@ -1770,6 +1783,180 @@ makeDrugSensitivityHistograms <- function(x, PhaseThresh, NucThresh, DeathThresh
 	}
 }
 
+plotSurvivalCurves <- function(birth, death, x, by,  Txs=uniqueo(x[['Tx']]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.dir, save.file='Survival Plot.png', xlim=c(0,50), ylim=c(0,1), stats.show=T, stats.y=0.8, viability.y=0.5, pval.y=0.2, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, legend.title.birth=paste(by, collapse=':'), legend.title.death=paste(by, collapse=':'), Tx.Colors=NULL, legend.cex=1, conf.int=F, table.offsets=c(2,-0.05,2,0.05), table.spacing=0.04)
+{
+
+  # Create a copy so we don't alter the original data
+  birth2 <- copy(birth)
+  death2 <- copy(death)
+
+  # Just plot the specified Txs
+  birth2 <- birth2[Tx %in% Txs]
+  death2 <- death2[Tx %in% Txs]
+
+  # Determine where to plot the global p-value
+  pval.coord = c(0, ylim[2]*pval.y)
+
+  # Change labels where necessary
+  if(!is.null(Tx.Labels.New))
+  {
+    if(length(Tx.Labels.New) > 0 && (length(Tx.Labels.New) == length(Txs)))
+    {
+      birth2[, Tx:=factor(Tx, levels=Txs, labels=Tx.Labels.New)]
+      death2[, Tx:=factor(Tx, levels=Txs, labels=Tx.Labels.New)]
+    }
+    else
+    {
+      stop('New and old Tx Label vectors should be the same length as the Txs vector. Aborting.')
+    }
+  }
+  else
+  {
+    birth2[, Tx:=factor(Tx, levels=Txs)]
+    death2[, Tx:=factor(Tx, levels=Txs)]
+  }
+
+  # Get survival curves
+  setorderv(birth2, cols=c(by,'LD.time'))
+  setorderv(death2, cols=c(by,'LD.time'))
+
+  l(temp.birth, sc.birth, sc.step.birth, stats.birth, stats.sym.birth, fw.table.birth, fit.birth, p.val.birth, p.val.trend.birth, my.f, rhs) %=% getSurvivalCurves(birth2, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status', na.val=as.character(NA), ignore.first=F)
+  l(temp.death, sc.death, sc.step.death, stats.death, stats.sym.death, fw.table.death, fit.death, p.val.death, p.val.trend.death, my.f, rhs) %=% getSurvivalCurves(death2, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status', na.val=as.character(NA), ignore.first=T)
+
+  # Calculate initial viabilities (from raw data)
+  inits <- x[Time == uniqueo(Time)[2], list(L=sum(Death.status.init=='LIVE'), N=.N, init.viability=round(100*sum(Death.status.init=='LIVE')/.N, 0)), by=c('Tx','Time')]
+  paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
+  inits[, txt2:=paste(txt,'%', sep='')]
+
+  if(save.plot)
+  {
+    # fwrite(stats.birth, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - birth - pvalues.csv')))
+    # fwrite(stats.death, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - death - pvalues.csv')))
+    cairo_pdf(filename=save.file, width=width, height=height) #, res=300, units='in')
+    .use.lightFont('Calibri Light')
+  }
+
+  legend.args <- list(x='topleft', bty='n', title.adj=0.15, cex=legend.cex, title=legend.title.birth)
+  if(stats.show)
+  {
+    legend.args <- merge.lists(legend.args, list(legend=character(getUniqueCombosN(sc.step.birth, idCols=by))))
+  }
+
+  sc.step.birth[, surv.flip:=1+(1-surv)]
+  data.table.plot.all(sc.step.birth,
+                      xcol='LD.time',
+                      ycol='surv.flip',
+                      errcol.upper='upper',
+                      errcol.lower = 'lower',
+                      by=by,
+                      type='l',
+                      xlim=xlim,
+                      ylim=c(0,max(c(max(ylim),sc.step.birth$surv.flip))),
+                      mar=c(4,4,1,1),
+                      mgp=c(2.7,1,0),
+                      xlab=xlab,
+                      ylab=ylab,
+                      legend.args=legend.args,
+                      cex.lab=1.5,
+                      cex.axis=1.5)
+  legend.args <- merge.lists(legend.args, list(title=legend.title.death, x='bottomleft'))
+  data.table.plot.all(sc.step.death,
+                      xcol='LD.time',
+                      ycol='surv',
+                      errcol.upper='upper',
+                      errcol.lower = 'lower',
+                      by=by,
+                      type='l',
+                      xlim=xlim,
+                      ylim=ylim,
+                      mar=c(4,4,1,1),
+                      mgp=c(2.7,1,0),
+                      xlab=xlab,
+                      ylab=ylab,
+                      legend.args=legend.args,
+                      cex.lab=1.5,
+                      cex.axis=1.5,
+                      add=T)
+  abline(h=1, lty=2, col='black', lwd=2)
+  temp <- copy(sc.step.birth)
+  setnames(temp, old=c('surv','upper','lower'), new=c('birth','birth.upper','birth.lower'))
+  sc.step.death[temp, c('birth', 'birth.upper','birth.lower'):=list(birth, birth.upper, birth.lower), on=c('Tx','LD.time')]
+  # TODO Fill in missing values with previous value for birth and death
+  # lapply.data.table(sc.step.death, FUN=function(x){x[is.na(x)] <- 1; return(x)}, cols=c('birth'), by=c('Tx','LD.time'), in.place = T)
+  # lapply.data.table(sc.step.death, FUN=function(x){x[is.na(x)] <- 0; return(x)}, cols=c('birth.upper','birth.lower'), by=c('Tx','LD.time'), in.place = T)
+  sc.step.death[, c('total','total.upper','total.lower'):=list(surv+(1-birth), sqrt(upper^2+birth.upper^2), sqrt(lower^2+birth.lower^2)), by=c('Tx','LD.time')]
+
+
+  if(stats.show)
+  {
+    if(!is.null(birth) && !is.na(table.offsets[1]) && !is.na(table.offsets[2]))
+    {
+      text(table.offsets[1], seq(par('usr')[4]+table.offsets[2], by=-1*table.spacing, length.out=nrow(fw.table.birth)), labels=fw.table.birth$final,  adj=c(0,1), family='Courier New', cex=1)
+    }
+    if(!is.null(death) && !is.na(table.offsets[3]) && !is.na(table.offsets[4]))
+    {
+      text(table.offsets[3], seq(par('usr')[3]+table.offsets[4], by=table.spacing, length.out=nrow(fw.table.death)), labels=rev(fw.table.death$final),  adj=c(0,0), family='Courier New', cex=1)
+    }
+  }
+
+
+  # text(x = min(x$Time),
+  #      y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
+  #      labels = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
+  #      cex = 2.5, adj=0)
+  #
+  # text(x = min(x$Time),
+  #      y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
+  #      labels = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
+  #      cex = 2.5, adj=0)
+
+  # Save/show the plots
+  if(save.plot)
+  {
+    dev.off()
+  }
+
+  if(save.plot)
+  {
+  	fwrite(stats.birth, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - birth - pvalues.csv')))
+  	fwrite(stats.death, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - death - pvalues.csv')))
+  	cairo_pdf(filename=paste(strsplit(save.file, '.', fixed=T)[[1]][1], '_total.pdf'), width=width, height=height) #, res=300, units='in')
+  	.use.lightFont('Calibri Light')
+  }
+  data.table.plot.all(sc.step.death[!is.na(total)],
+  				xcol='LD.time',
+  				ycol='total',
+  				errcol.upper='total.upper',
+  				errcol.lower = 'total.lower',
+  				by=by,
+  				type='l',
+  				xlim=xlim,
+  				ylim=c(0,1.2),
+  				mar=c(4,4,1,1),
+  				mgp=c(2.7,1,0),
+  				xlab=xlab,
+  				ylab='Total Cell Number',
+  				legend.args=merge.lists(legend.args, list(title='Tx Group')),
+  				cex.lab=1.5,
+  				cex.axis=1.5,
+  				add=F)
+  # Save/show the plots
+  if(save.plot)
+  {
+  	dev.off()
+  }
+
+  cat("\nProliferation:\n")
+  print(stats.sym.birth)
+  cat("\nDeath:\n")
+  print(stats.sym.death)
+
+  # Return statistics, plots, and fits
+  return(list(stats.birth=stats.birth, stats.sym.birth=stats.sym.birth, sc.birth=sc.birth, sc.step.birth=sc.step.birth, birth=temp.birth, fit.birth=fit.birth, p.val.birth=p.val.birth, p.val.trend.birth=p.val.trend.birth,
+              stats.death=stats.death, stats.sym.death=stats.sym.death, sc.death=sc.death, sc.step.death=sc.step.death, death=temp.death, fit.death=fit.death, p.val.death=p.val.death, p.val.trend.death=p.val.trend.death))
+
+}
+
 makeDrugSensitivityScatterPlots <- function(x, PhaseThresh, NucThresh, DeathThresh=0, TestThresh=0, makePhase=T, makeTest=F, save.dir, type='cmd', legend.args=list(), ...)
 {
 	legend.args <- merge.lists(list(bty='n'), legend.args)
@@ -1790,7 +1977,111 @@ makeDrugSensitivityScatterPlots <- function(x, PhaseThresh, NucThresh, DeathThre
 	}
 }
 
-plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1, conf.int=F)
+
+plotSurvivalCurve <- function(x.surv, x, by='Tx', Txs=uniqueo(x[['Tx']]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1, conf.int=F)
+{
+  temp1 <- copy(x.surv)
+
+	# Determine where to plot the global p-value
+	pval.coord = c(0, ylim[2]*pval.y)
+
+	# Calculate initial viabilities (from raw data)
+	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
+	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
+	inits[, txt2:=paste(txt,'%', sep='')]
+	if(!is.null(Tx.Labels.New))
+	{
+		if(length(Tx.Labels.New) > 0 && (length(Tx.Labels.New) == length(Txs)))
+		{
+		  temp1[, Tx:=factor(Tx, levels=Txs, labels=Tx.Labels.New)]
+		}
+		else
+		{
+			stop('New and old Tx Label vectors should be the same length as the Txs vector. Aborting.')
+		}
+	}
+	else
+	{
+	  temp1[, Tx:=factor(Tx, levels=Txs)]
+	}
+
+	# Get survival curves
+	l(temp, my.surv, my.surv.s, stats, stats.sym, fw.table, fit, p.val, p.val.trend, my.f, rhs) %=% getSurvivalCurves(temp1, flip=flip, by=by, idcol='cId', tcol='LD.time', ecol='LD.status')
+
+	# Just plot the specified Txs
+	temp <- temp[Tx %in% Txs]
+
+	# browser()
+	# data.table.plot.all(my.surv.s, xcol='LD.time', ycol='surv', errcol.upper='upper', errcol.lower = 'lower', by=by, type='s', xlim=c(0,49), ylim=c(0,1), mar=c(2.5,3.7,4,1))
+	labs <- getUniqueCombos(temp, rhs)
+	makeComplexId(labs, rhs)
+	if(!is.null(Tx.Colors))
+	{
+		labs$cols <- Tx.Colors
+	}
+	else
+	{
+		labs$cols <- (loopingPastels(1:length(labs$cId), a=1, max.k=length(labs$cId)))
+	}
+
+	.use.lightFont()
+
+	# Generate the survival curves, inverting probabilities if desired
+	if(flip)
+	{
+		if(generate.labels)
+		{
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp1, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		else
+		{
+			daPlot <- ggsurvplot(fit, fun='event', pval.coord=pval.coord, data = temp1, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+
+	}
+	else
+	{
+		if(generate.labels)
+		{
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp1, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', legend.labs=labs$cId, ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+		else
+		{
+			daPlot <- ggsurvplot(fit, pval.coord=pval.coord, data = temp1, censor=F, pval=T, palette=labs$cols, xlim=xlim, ylim=ylim, conf.int = conf.int, ylab=ylab, xlab=xlab, legend.title='', ggtheme = theme_classic2(base_family = "Open Sans Light", base_size = 14))
+		}
+	}
+
+	# Plot the curves
+	daPlot$plot <- daPlot$plot+
+		ggplot2::annotate("text",
+					   x = min(x$Time), y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
+					   label = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
+					   size = 2.5,
+					   hjust=0)+
+		guides(colour = guide_legend(nrow = (length(Txs) %/% 3) + 1))+
+		theme(legend.text = element_text(size = legend.cex*12))
+	stats <- as.data.table(pairwise_survdiff(my.f, data = temp1)$p.value, keep.rownames=T)
+	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
+
+	# Save/show the plots
+	if(save.plot)
+	{
+		fwrite(stats, file=file.path(save.dir, paste0(tools::file_path_sans_ext(save.file),' - pvalues.csv')))
+		png(file.path(save.dir, save.file), res=300, units='in', width=width, height=height)
+		print(daPlot)
+		dev.off()
+	}
+	else
+	{
+		print(daPlot)
+		print(stats)
+	}
+
+	# Return statistics, plots, and fits
+	return(list(stats=stats, stats.sym=stats.sym, daPlot=daPlot, fit=fit))
+}
+
+plotConsolidatedSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), ylab, xlab='Time [h]', flip=F, save.plot=T, save.file='Survival Plot.png', ylim=c(0,1), viability.y=0.5, pval.y=0.2, xlim=c(0,50), save.dir, width=4, height=4, generate.labels=T, Tx.Labels.New=NULL, Tx.Colors=NULL, legend.cex=1, conf.int=F)
 {
 	# Determine where to plot the global p-value
 	pval.coord = c(0, ylim[2]*pval.y)
@@ -1802,9 +2093,9 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	temp <- temp[Tx %in% Txs]
 
 	# Calculate initial viabilities (from raw data)
-	inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
-	paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
-	inits[, txt2:=paste(txt,'%', sep='')]
+	# inits <- x[Time == uniqueo(Time)[2], list(L=sum(Nuc.norm < NucThresh, na.rm=T), N=.N, init.viability=round(100*sum(Phase.norm >= PhaseThresh, na.rm=T)/.N, 0)), by=c('Tx','Time')]
+	# paste.cols(inits, cols=c('Tx','init.viability'), name='txt', sep=':')
+	# inits[, txt2:=paste(txt,'%', sep='')]
 	if(!is.null(Tx.Labels.New))
 	{
 		if(length(Tx.Labels.New) > 0 && (length(Tx.Labels.New) == length(Txs)))
@@ -1824,8 +2115,8 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 	# Get survival curves
 	setkey(temp, Tx)
 	rhs <- names(x.surv)[!names(x.surv) %in% c('cId','LD.time','LD.status')]
-	f <- makeBasicFormula('Surv(LD.time, LD.status)', rhs)
-	fit <- do.call(survfit, args=list(formula=f, data=temp))
+	my.f <- makeBasicFormula('Surv(LD.time, LD.status)', rhs)
+	fit <- do.call(survfit, args=list(formula=my.f, data=temp))
 	# fit <- survfit(makeBasicFormula('Surv(LD.time, LD.status)', rhs), data = temp)
 	labs <- getUniqueCombos(temp, rhs)
 	makeComplexId(labs, rhs)
@@ -1867,14 +2158,14 @@ plotSurvivalCurve <- function(x.surv, x, TxCol='Tx', Txs=uniqueo(x[[TxCol]]), yl
 
 	# Plot the curves
 	daPlot$plot <- daPlot$plot+
-		ggplot2::annotate("text",
-					   x = min(x$Time), y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
-					   label = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
-					   size = 2.5,
-					   hjust=0)+
+		# ggplot2::annotate("text",
+		# 			   x = min(x$Time), y = ylim[1]+(ylim[2]-ylim[1])*viability.y, # x and y coordinates of the text
+		# 			   label = paste0("Init. Viability:\n", paste(inits[Tx %in% Txs]$txt2, collapse="\n")),
+		# 			   size = 2.5,
+		# 			   hjust=0)+
 		guides(colour = guide_legend(nrow = (length(Txs) %/% 3) + 1))+
 		theme(legend.text = element_text(size = legend.cex*12))
-	stats <- as.data.table(pairwise_survdiff(Surv(LD.time, LD.status) ~ Tx, data = temp)$p.value, keep.rownames=T)
+	stats <- as.data.table(pairwise_survdiff(my.f, data = temp)$p.value, keep.rownames=T)
 	stats.sym <- lapply.data.table(stats, getPSymbol, cols=getAllColNamesExcept(stats, 'rn'), by=c('rn'))
 
 	# Save/show the plots
