@@ -635,11 +635,6 @@ filterLBPCodes <- function(x, nSigma=-2)
 	removeCols(x, LBPColsToDelete)
 }
 
-splitColumnAtString <- function(x, colToSplit, newColNames, sep='.', keep=NULL)
-{
-	x[, (newColNames) := tstrsplit(get(colToSplit), sep, fixed=T, keep=keep)]
-}
-
 #' Intended to be used with a wide table that still has ImageChannel and MaskChannel information.
 calculateChannelProducts <- function(x, comboCol, valsToPermute, idCols, mCols=NULL, mColContains=NULL, FUN=getComboProducts, sep='_')
 {
