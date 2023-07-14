@@ -609,11 +609,6 @@ removeMeasurementNames <- function(x, names)
 	return(x)
 }
 
-replaceSubStringInAllRowsOfCol <- function(x, old, new, col)
-{
-	x[,c(col):=gsub(old,new,get(col),fixed=TRUE)]
-}
-
 fixLongTableStringsInCol <- function(x, col)
 {
 	replaceSubStringInAllRowsOfCol(x,'_Order_','',col)
